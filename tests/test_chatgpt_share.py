@@ -1,6 +1,8 @@
+import tempfile
 import unittest
 from unittest.mock import patch
 import urllib.error
+from pathlib import Path
 
 from portable_ai_context.adapters import chatgpt_share
 from portable_ai_context.errors import ParseError
@@ -28,6 +30,52 @@ class ChatGPTShareTests(unittest.TestCase):
     def test_share_id_is_recognized_as_url_after_normalization(self):
         self.assertTrue(chatgpt_share.is_share_url(SHARE_ID))
 
+    def test_macos_candidate_paths_cover_supported_browsers(self):
+        paths = chatgpt_share._platform_browser_paths(
+            "Darwin", {}, Path("/Users/test")
+        )
+        joined = "\n".join(paths)
+        self.assertIn("Google Chrome.app", joined)
+        self.assertIn("Microsoft Edge.app", joined)
+        self.assertIn("Brave Browser.app", joined)
+        self.assertIn("Chromium.app", joined)
+        self.assertIn("/Users/test/Applications/", joined)
+
+    def test_windows_candidate_paths_cover_supported_browsers(self):
+        paths = chatgpt_share._platform_browser_paths(
+            "Windows",
+            {
+                "PROGRAMFILES": r"C:\Program Files",
+                "PROGRAMFILES(X86)": r"C:\Program Files (x86)",
+                "LOCALAPPDATA": r"C:\Users\test\AppData\Local",
+            },
+            Path("/unused"),
+        )
+        joined = "\n".join(paths)
+        self.assertIn(r"Google\Chrome\Application\chrome.exe", joined)
+        self.assertIn(r"Microsoft\Edge\Application\msedge.exe", joined)
+        self.assertIn(r"BraveSoftware\Brave-Browser\Application\brave.exe", joined)
+        self.assertIn(r"C:\Users\test\AppData\Local", joined)
+
+    def test_linux_candidate_paths_cover_common_locations(self):
+        paths = chatgpt_share._platform_browser_paths("Linux", {}, Path("/home/test"))
+        self.assertIn("/usr/bin/google-chrome", paths)
+        self.assertIn("/usr/bin/chromium", paths)
+        self.assertIn("/snap/bin/chromium", paths)
+        self.assertIn("/usr/bin/microsoft-edge", paths)
+        self.assertIn("/usr/bin/brave-browser", paths)
+
+    def test_browser_command_uses_isolated_profile(self):
+        with tempfile.TemporaryDirectory(prefix="paic-test-") as profile:
+            cmd = chatgpt_share._browser_command(
+                "/browser", profile, "--headless=new", FULL
+            )
+            self.assertIn(f"--user-data-dir={profile}", cmd)
+            self.assertIn("--disable-extensions", cmd)
+            self.assertIn("--disable-sync", cmd)
+            self.assertNotIn("--remote-debugging-port=9222", cmd)
+            self.assertEqual(cmd[-1], FULL)
+
     @patch.object(chatgpt_share, "_fetch_browser")
     @patch.object(chatgpt_share, "_fetch_http")
     def test_403_falls_back_to_browser(self, fetch_http, fetch_browser):
@@ -43,6 +91,11 @@ class ChatGPTShareTests(unittest.TestCase):
         fetch_browser.side_effect = ParseError("no browser succeeded")
         with self.assertRaisesRegex(ParseError, "direct HTTP transport failed: URLError"):
             chatgpt_share.fetch(FULL)
+
+    @patch.object(chatgpt_share, "_browser_candidates", return_value=[])
+    def test_browser_failure_explains_override(self, _candidates):
+        with self.assertRaisesRegex(ParseError, "PAIC_BROWSER"):
+            chatgpt_share._fetch_browser(FULL)
 
 
 if __name__ == "__main__":
