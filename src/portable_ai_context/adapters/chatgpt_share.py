@@ -3,6 +3,7 @@ from __future__ import annotations
 import ntpath
 import os
 import platform
+import posixpath
 import re
 from pathlib import Path
 import shutil
@@ -69,23 +70,27 @@ def _platform_browser_paths(
 ) -> list[str]:
     """Return platform-specific browser executable paths without probing them.
 
-    Keeping candidate generation separate from filesystem probing makes discovery
-    deterministic and testable on CI runners that do not have every browser installed.
+    Candidate generation uses the *target platform's* path semantics rather than
+    the host runner's semantics. That lets Windows CI validate macOS discovery
+    (and vice versa) without silently rewriting separators.
     """
     system_name = (system_name or platform.system()).lower()
     environ = environ if environ is not None else dict(os.environ)
     home = home or Path.home()
 
     if system_name == "darwin":
+        home_posix = str(home).replace("\\", "/")
+        if home_posix and not home_posix.startswith("/"):
+            home_posix = "/" + home_posix.lstrip("/")
         return [
             "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
             "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
             "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
             "/Applications/Chromium.app/Contents/MacOS/Chromium",
-            str(home / "Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"),
-            str(home / "Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
-            str(home / "Applications/Brave Browser.app/Contents/MacOS/Brave Browser"),
-            str(home / "Applications/Chromium.app/Contents/MacOS/Chromium"),
+            posixpath.join(home_posix, "Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"),
+            posixpath.join(home_posix, "Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
+            posixpath.join(home_posix, "Applications/Brave Browser.app/Contents/MacOS/Brave Browser"),
+            posixpath.join(home_posix, "Applications/Chromium.app/Contents/MacOS/Chromium"),
         ]
 
     if system_name == "windows":
@@ -108,8 +113,6 @@ def _platform_browser_paths(
         ]
 
     if system_name == "linux":
-        # Most package-manager installs are covered via PATH; these paths cover
-        # common distro/snap locations when PATH is intentionally minimal.
         return [
             "/usr/bin/google-chrome",
             "/usr/bin/google-chrome-stable",
@@ -166,15 +169,12 @@ def _windows_registry_candidates() -> list[str]:
 def _browser_candidates() -> list[str]:
     candidates: list[str] = []
 
-    # Explicit override is useful on portable/nonstandard installations.
     configured = os.environ.get("PAIC_BROWSER", "").strip()
     if configured:
         configured_path = shutil.which(configured) or configured
         if Path(configured_path).is_file():
             candidates.append(configured_path)
 
-    # PATH candidates work well on Linux and package-manager installs and are
-    # also useful on Windows/macOS when users expose browser binaries manually.
     for name in PATH_BROWSER_NAMES:
         path = shutil.which(name)
         if path:
