@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import ntpath
 import os
+import platform
 import re
 from pathlib import Path
 import shutil
@@ -17,6 +19,19 @@ from . import chatgpt_html
 
 HOSTS = {"chatgpt.com", "www.chatgpt.com"}
 SHARE_ID_RE = re.compile(r"^[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$")
+
+PATH_BROWSER_NAMES = [
+    "google-chrome",
+    "google-chrome-stable",
+    "chromium",
+    "chromium-browser",
+    "microsoft-edge",
+    "microsoft-edge-stable",
+    "brave-browser",
+    "brave",
+]
+
+WINDOWS_APP_PATH_EXES = ["chrome.exe", "msedge.exe", "brave.exe", "chromium.exe"]
 
 
 def normalize_share_input(value: str) -> str:
@@ -40,59 +55,171 @@ def is_share_url(value: str) -> bool:
         parsed = urllib.parse.urlparse(normalize_share_input(value))
     except Exception:
         return False
-    return parsed.scheme in {"http", "https"} and parsed.netloc.lower() in HOSTS and parsed.path.startswith("/share/")
+    return (
+        parsed.scheme in {"http", "https"}
+        and parsed.netloc.lower() in HOSTS
+        and parsed.path.startswith("/share/")
+    )
+
+
+def _platform_browser_paths(
+    system_name: str | None = None,
+    environ: dict[str, str] | None = None,
+    home: Path | None = None,
+) -> list[str]:
+    """Return platform-specific browser executable paths without probing them.
+
+    Keeping candidate generation separate from filesystem probing makes discovery
+    deterministic and testable on CI runners that do not have every browser installed.
+    """
+    system_name = (system_name or platform.system()).lower()
+    environ = environ if environ is not None else dict(os.environ)
+    home = home or Path.home()
+
+    if system_name == "darwin":
+        return [
+            "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+            "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+            "/Applications/Chromium.app/Contents/MacOS/Chromium",
+            str(home / "Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"),
+            str(home / "Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
+            str(home / "Applications/Brave Browser.app/Contents/MacOS/Brave Browser"),
+            str(home / "Applications/Chromium.app/Contents/MacOS/Chromium"),
+        ]
+
+    if system_name == "windows":
+        bases = [
+            environ.get("PROGRAMFILES"),
+            environ.get("PROGRAMFILES(X86)"),
+            environ.get("LOCALAPPDATA"),
+        ]
+        rels = [
+            r"Google\Chrome\Application\chrome.exe",
+            r"Microsoft\Edge\Application\msedge.exe",
+            r"BraveSoftware\Brave-Browser\Application\brave.exe",
+            r"Chromium\Application\chrome.exe",
+        ]
+        return [
+            ntpath.join(base, rel)
+            for base in bases
+            if base
+            for rel in rels
+        ]
+
+    if system_name == "linux":
+        # Most package-manager installs are covered via PATH; these paths cover
+        # common distro/snap locations when PATH is intentionally minimal.
+        return [
+            "/usr/bin/google-chrome",
+            "/usr/bin/google-chrome-stable",
+            "/usr/bin/chromium",
+            "/usr/bin/chromium-browser",
+            "/usr/bin/microsoft-edge",
+            "/usr/bin/microsoft-edge-stable",
+            "/usr/bin/brave-browser",
+            "/usr/local/bin/google-chrome",
+            "/usr/local/bin/chromium",
+            "/snap/bin/chromium",
+            "/snap/bin/brave",
+        ]
+
+    return []
+
+
+def _windows_registry_candidates() -> list[str]:
+    """Read Windows App Paths entries when available.
+
+    This is best-effort and returns only executable paths. Registry errors are
+    intentionally swallowed because browser discovery must remain optional.
+    """
+    if platform.system().lower() != "windows":
+        return []
+
+    try:
+        import winreg  # type: ignore
+    except ImportError:
+        return []
+
+    roots = [winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE]
+    views = [0]
+    for flag_name in ["KEY_WOW64_64KEY", "KEY_WOW64_32KEY"]:
+        flag = getattr(winreg, flag_name, 0)
+        if flag and flag not in views:
+            views.append(flag)
+
+    found: list[str] = []
+    for root in roots:
+        for exe in WINDOWS_APP_PATH_EXES:
+            key_name = rf"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\{exe}"
+            for view in views:
+                try:
+                    with winreg.OpenKey(root, key_name, 0, winreg.KEY_READ | view) as key:
+                        value, _ = winreg.QueryValueEx(key, None)
+                except OSError:
+                    continue
+                if isinstance(value, str) and value.strip():
+                    found.append(value.strip().strip('"'))
+    return found
 
 
 def _browser_candidates() -> list[str]:
     candidates: list[str] = []
 
-    # PATH candidates work well on Linux and package-manager installs.
-    for name in [
-        "google-chrome", "google-chrome-stable", "chromium", "chromium-browser",
-        "microsoft-edge", "microsoft-edge-stable", "brave-browser", "brave",
-    ]:
+    # Explicit override is useful on portable/nonstandard installations.
+    configured = os.environ.get("PAIC_BROWSER", "").strip()
+    if configured:
+        configured_path = shutil.which(configured) or configured
+        if Path(configured_path).is_file():
+            candidates.append(configured_path)
+
+    # PATH candidates work well on Linux and package-manager installs and are
+    # also useful on Windows/macOS when users expose browser binaries manually.
+    for name in PATH_BROWSER_NAMES:
         path = shutil.which(name)
         if path:
             candidates.append(path)
 
-    # macOS standard application paths.
-    home = Path.home()
-    mac_paths = [
-        "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
-        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-        "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
-        "/Applications/Chromium.app/Contents/MacOS/Chromium",
-        str(home / "Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"),
-        str(home / "Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
-        str(home / "Applications/Brave Browser.app/Contents/MacOS/Brave Browser"),
-        str(home / "Applications/Chromium.app/Contents/MacOS/Chromium"),
-    ]
-    candidates.extend(p for p in mac_paths if Path(p).is_file())
+    candidates.extend(
+        path
+        for path in _platform_browser_paths()
+        if Path(path).is_file()
+    )
+    candidates.extend(
+        path
+        for path in _windows_registry_candidates()
+        if Path(path).is_file()
+    )
 
-    # Windows standard locations.
-    bases = [
-        os.environ.get("PROGRAMFILES"),
-        os.environ.get("PROGRAMFILES(X86)"),
-        os.environ.get("LOCALAPPDATA"),
-    ]
-    rels = [
-        r"Google\Chrome\Application\chrome.exe",
-        r"Microsoft\Edge\Application\msedge.exe",
-        r"BraveSoftware\Brave-Browser\Application\brave.exe",
-    ]
-    for base in [b for b in bases if b]:
-        for rel in rels:
-            p = str(Path(base) / rel)
-            if Path(p).is_file():
-                candidates.append(p)
-
-    seen = set()
-    out = []
+    seen: set[str] = set()
+    out: list[str] = []
     for item in candidates:
-        if item not in seen:
-            seen.add(item)
+        normalized = os.path.normcase(os.path.abspath(item))
+        if normalized not in seen:
+            seen.add(normalized)
             out.append(item)
     return out
+
+
+def _browser_command(browser: str, profile: str, headless: str, url: str) -> list[str]:
+    """Build the isolated Chromium-family capture command.
+
+    The command always points Chromium at a fresh temporary profile and never at
+    the user's normal browser profile/cookies.
+    """
+    return [
+        browser,
+        headless,
+        "--disable-gpu",
+        "--disable-extensions",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--disable-sync",
+        f"--user-data-dir={profile}",
+        "--virtual-time-budget=8000",
+        "--dump-dom",
+        url,
+    ]
 
 
 def _fetch_http(url: str, timeout: int = 45) -> str:
@@ -109,23 +236,31 @@ def _fetch_http(url: str, timeout: int = 45) -> str:
 
 
 def _fetch_browser(url: str, timeout: int = 60) -> str:
+    browsers = _browser_candidates()
+    if not browsers:
+        raise ParseError(
+            "browser fallback failed; no supported Chromium-family browser found; "
+            "set PAIC_BROWSER to an executable path if installed in a nonstandard location"
+        )
+
     failures: list[str] = []
-    for browser in _browser_candidates():
+    for browser in browsers:
         for headless in ["--headless=new", "--headless"]:
             with tempfile.TemporaryDirectory(prefix="paic-browser-") as profile:
-                cmd = [
-                    browser, headless, "--disable-gpu", "--disable-extensions",
-                    "--no-first-run", "--no-default-browser-check",
-                    f"--user-data-dir={profile}", "--virtual-time-budget=8000",
-                    "--dump-dom", url,
-                ]
+                cmd = _browser_command(browser, profile, headless, url)
                 try:
                     proc = subprocess.run(
-                        cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                        cmd,
+                        text=True,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
                         timeout=timeout,
                     )
-                except Exception as exc:
-                    failures.append(type(exc).__name__)
+                except subprocess.TimeoutExpired:
+                    failures.append(f"{Path(browser).name}:timeout")
+                    continue
+                except OSError as exc:
+                    failures.append(f"{Path(browser).name}:{type(exc).__name__}")
                     continue
                 if proc.returncode == 0 and chatgpt_html.can_load(proc.stdout):
                     return proc.stdout
