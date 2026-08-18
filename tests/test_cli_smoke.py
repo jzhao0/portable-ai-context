@@ -19,6 +19,7 @@ class SmokeCommandTests(unittest.TestCase):
             source=SourceInfo(
                 kind="chatgpt_share_url",
                 locator="https://chatgpt.com/share/private-link",
+                metadata={"capture_method": "direct_http"},
             ),
             snapshot=SnapshotInfo(
                 updated_at=1234.5,
@@ -39,6 +40,7 @@ class SmokeCommandTests(unittest.TestCase):
         self.assertTrue(payload["ok"])
         self.assertEqual(payload["platform"], "darwin")
         self.assertEqual(payload["source_kind"], "chatgpt_share_url")
+        self.assertEqual(payload["capture_method"], "direct_http")
         self.assertEqual(payload["message_count"], 2)
         self.assertEqual(payload["snapshot_updated_at"], 1234.5)
         self.assertEqual(payload["raw_node_count"], 9)
