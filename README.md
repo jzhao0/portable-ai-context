@@ -40,6 +40,7 @@ The design goals are:
 - integrity report
 - privacy report
 - optional migration prompt via OpenAI-compatible API
+- compile budget report with token estimates / exact injected counts when configured
 
 ### Not yet promised
 
@@ -48,10 +49,10 @@ The design goals are:
 - Claude shared-page HTML adapter
 - reconstruction of original Gemini chat-thread boundaries from flat My Activity exports
 - localized Gemini activity prompt formats beyond the documented alpha subset
+- bundled model-specific exact tokenizer packages (exact counters can be injected through the compiler API)
 - browser extension
 - desktop GUI
 - stable `.aicb` schema
-- exact tokenizer-based context budgets
 - MCP handoff server
 
 Those belong on the roadmap, not in the v0.1 contract.
@@ -96,8 +97,11 @@ paic compile conversation.clean.html \\
   --api-base https://api.example.com/v1 \\
   --map-model fast-model \\
   --final-model strong-model \\
+  --profile standard \\
   -o migration
 ```
+
+Named final-prompt budgets are `lite` (4,000), `standard` (16,000), and `full` (64,000) tokens. You can instead use `--budget <tokens>`. The dependency-free CLI uses an explicit character/token estimate; exact tokenizer counters can be injected through the Python compiler API. See [`docs/token-budgets.md`](docs/token-budgets.md).
 
 `paic` never requires API access for extraction, inspection, verification, or bundle creation.
 

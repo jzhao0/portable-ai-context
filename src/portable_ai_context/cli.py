@@ -19,6 +19,20 @@ def _print_json(value) -> None:
     print(json.dumps(value, ensure_ascii=False, indent=2))
 
 
+def _positive_int(value: str) -> int:
+    parsed = int(value)
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError("must be a positive integer")
+    return parsed
+
+
+def _positive_float(value: str) -> float:
+    parsed = float(value)
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError("must be positive")
+    return parsed
+
+
 def cmd_inspect(args) -> int:
     conv = load_conversation(args.source)
     integrity = inspect_integrity(conv)
@@ -92,7 +106,7 @@ def cmd_compile(args) -> int:
     backend = OpenAICompatibleBackend(api_base=args.api_base, api_key=key, timeout=args.timeout)
     out = Path(args.output)
     out.mkdir(parents=True, exist_ok=True)
-    final, notes = compile_migration(
+    result = compile_migration(
         conv,
         backend=backend,
         map_model=args.map_model,
@@ -100,13 +114,28 @@ def cmd_compile(args) -> int:
         chunk_chars=args.chunk_chars,
         reduce_chars=args.reduce_chars,
         state_path=args.state,
+        budget_tokens=args.budget,
+        profile=args.profile,
+        chars_per_token=args.chars_per_token,
     )
-    (out / "MIGRATION_PROMPT.md").write_text(final + "\n", encoding="utf-8")
-    (out / "checkpoint.notes.md").write_text(
-        "\n\n".join(f"# Note {i}\n\n{x}" for i, x in enumerate(notes, 1)) + "\n",
+    prompt_path = out / "MIGRATION_PROMPT.md"
+    notes_path = out / "checkpoint.notes.md"
+    report_path = out / "compile-report.json"
+    prompt_path.write_text(result.final + "\n", encoding="utf-8")
+    notes_path.write_text(
+        "\n\n".join(f"# Note {i}\n\n{x}" for i, x in enumerate(result.notes, 1)) + "\n",
         encoding="utf-8",
     )
-    print(out / "MIGRATION_PROMPT.md")
+    report_path.write_text(
+        json.dumps(result.report.to_dict(), ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    _print_json({
+        "migration_prompt": str(prompt_path),
+        "checkpoint_notes": str(notes_path),
+        "compile_report": str(report_path),
+        "budget": result.report.to_dict(),
+    })
     return 0
 
 
@@ -147,10 +176,23 @@ def build_parser() -> argparse.ArgumentParser:
     compile_p.add_argument("--api-key-env", default="PAIC_API_KEY")
     compile_p.add_argument("--map-model", required=True)
     compile_p.add_argument("--final-model", required=True)
-    compile_p.add_argument("--chunk-chars", type=int, default=120000)
-    compile_p.add_argument("--reduce-chars", type=int, default=180000)
+    compile_p.add_argument("--chunk-chars", type=_positive_int, default=120000)
+    compile_p.add_argument("--reduce-chars", type=_positive_int, default=180000)
+    budget_group = compile_p.add_mutually_exclusive_group()
+    budget_group.add_argument("--budget", type=_positive_int, help="target final migration-prompt token budget")
+    budget_group.add_argument(
+        "--profile",
+        choices=["lite", "standard", "full"],
+        help="named final migration-prompt budget profile",
+    )
+    compile_p.add_argument(
+        "--chars-per-token",
+        type=_positive_float,
+        default=4.0,
+        help="character/token estimate used by the dependency-free fallback counter",
+    )
     compile_p.add_argument("--state")
-    compile_p.add_argument("--timeout", type=int, default=300)
+    compile_p.add_argument("--timeout", type=_positive_int, default=300)
     compile_p.set_defaults(func=cmd_compile)
 
     return p
