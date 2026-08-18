@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -15,9 +16,11 @@ from . import chatgpt_html
 
 
 HOSTS = {"chatgpt.com", "www.chatgpt.com"}
+SHARE_ID_RE = re.compile(r"^[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$")
 
 
 def normalize_share_input(value: str) -> str:
+    """Normalize common ChatGPT shared-link forms without touching local paths."""
     value = (value or "").strip()
     if value.startswith("https://") or value.startswith("http://"):
         return value
@@ -27,6 +30,8 @@ def normalize_share_input(value: str) -> str:
         return "https://chatgpt.com" + value
     if value.startswith("share/"):
         return "https://chatgpt.com/" + value
+    if SHARE_ID_RE.fullmatch(value):
+        return "https://chatgpt.com/share/" + value
     return value
 
 
@@ -59,6 +64,8 @@ def _browser_candidates() -> list[str]:
         "/Applications/Chromium.app/Contents/MacOS/Chromium",
         str(home / "Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"),
         str(home / "Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
+        str(home / "Applications/Brave Browser.app/Contents/MacOS/Brave Browser"),
+        str(home / "Applications/Chromium.app/Contents/MacOS/Chromium"),
     ]
     candidates.extend(p for p in mac_paths if Path(p).is_file())
 
@@ -130,14 +137,25 @@ def fetch(url: str) -> str:
     url = normalize_share_input(url)
     if not is_share_url(url):
         raise ParseError("not a ChatGPT shared URL")
+
+    http_failure: str | None = None
     try:
         text = _fetch_http(url)
         if chatgpt_html.can_load(text):
             return text
+        http_failure = "direct HTTP returned a page without conversation data"
     except urllib.error.HTTPError as exc:
         if exc.code not in {401, 403, 429}:
-            raise
-    return _fetch_browser(url)
+            raise ParseError(f"direct HTTP failed with unexpected status {exc.code}") from exc
+        http_failure = f"direct HTTP blocked with status {exc.code}"
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        http_failure = f"direct HTTP transport failed: {type(exc).__name__}"
+
+    try:
+        return _fetch_browser(url)
+    except ParseError as exc:
+        detail = f"; {http_failure}" if http_failure else ""
+        raise ParseError(f"ChatGPT shared-URL capture failed{detail}; browser fallback: {exc}") from exc
 
 
 def load(source: str) -> Conversation:
