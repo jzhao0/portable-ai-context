@@ -15,23 +15,35 @@ from portable_ai_context.utils import normalize_text, source_fingerprint
 GEMINI_PRODUCT_NAMES = {"gemini", "gemini apps"}
 PROMPT_PREFIXES = ("Prompted: ", "Prompted ")
 BLOCK_TAGS = {"p", "div", "pre", "li", "tr", "section", "article", "blockquote"}
+SUPPRESSED_TAGS = {"script", "style"}
 
 
 class _HtmlTextExtractor(HTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self.parts: list[str] = []
+        self.suppressed_depth = 0
 
     def handle_starttag(self, tag: str, attrs) -> None:
-        if tag.lower() == "br":
+        tag = tag.lower()
+        if tag in SUPPRESSED_TAGS:
+            self.suppressed_depth += 1
+            return
+        if self.suppressed_depth == 0 and tag == "br":
             self.parts.append("\n")
 
     def handle_endtag(self, tag: str) -> None:
-        if tag.lower() in BLOCK_TAGS:
+        tag = tag.lower()
+        if tag in SUPPRESSED_TAGS:
+            if self.suppressed_depth:
+                self.suppressed_depth -= 1
+            return
+        if self.suppressed_depth == 0 and tag in BLOCK_TAGS:
             self.parts.append("\n")
 
     def handle_data(self, data: str) -> None:
-        self.parts.append(data)
+        if self.suppressed_depth == 0:
+            self.parts.append(data)
 
     def text(self) -> str:
         return normalize_text("".join(self.parts))
