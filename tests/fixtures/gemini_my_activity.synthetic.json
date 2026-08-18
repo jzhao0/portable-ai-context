@@ -6,7 +6,7 @@
     "products": ["Gemini Apps"],
     "safeHtmlItem": [
       {
-        "html": "<div><p>Tail verification passed.</p><pre>2/2 messages preserved</pre></div>"
+        "html": "<div><p>Tail verification passed.</p><pre>2/2 messages preserved</pre><script>PRIVATE_EMBEDDED_SCRIPT</script><style>.x{content:'PRIVATE_EMBEDDED_STYLE'}</style></div>"
       }
     ],
     "titleUrl": "https://example.invalid/private-gemini-url",
