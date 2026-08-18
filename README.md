@@ -28,6 +28,7 @@ The design goals are:
 - JSONL (`role`, `text`)
 - saved ChatGPT share-page HTML / safe archive HTML
 - ChatGPT shared URL (**experimental**; browser fallback is best-effort)
+- single-conversation Claude JSON export subset (local `.json`; see [`docs/claude-adapter.md`](docs/claude-adapter.md))
 
 ### Outputs
 
@@ -41,7 +42,9 @@ The design goals are:
 
 ### Not yet promised
 
-- Claude/Gemini/Grok adapters
+- Gemini/Grok adapters
+- automatic multi-conversation Claude archive selection
+- Claude shared-page HTML adapter
 - browser extension
 - desktop GUI
 - stable `.aicb` schema
