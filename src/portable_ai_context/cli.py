@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import platform
 from pathlib import Path
 import sys
 
@@ -45,6 +46,24 @@ def cmd_verify(args) -> int:
         last_assistant = next((m for m in reversed(conv.messages) if m.role == "assistant"), None)
         print("\nLAST USER:\n" + (last_user.text if last_user else "<none>"))
         print("\nLAST ASSISTANT:\n" + (last_assistant.text if last_assistant else "<none>"))
+    return 0
+
+
+def cmd_smoke(args) -> int:
+    """Run a live capture smoke test without printing conversation content."""
+    conv = load_conversation(args.source)
+    report = inspect_integrity(conv)
+    _print_json({
+        "ok": True,
+        "platform": platform.system().lower(),
+        "source_kind": conv.source.kind,
+        "message_count": report.message_count,
+        "snapshot_updated_at": report.snapshot_updated_at,
+        "raw_node_count": report.raw_node_count,
+        "conversation_digest": report.conversation_digest,
+        "last_user_hash": report.last_user_hash,
+        "last_assistant_hash": report.last_assistant_hash,
+    })
     return 0
 
 
@@ -102,6 +121,13 @@ def build_parser() -> argparse.ArgumentParser:
     verify_p.add_argument("source")
     verify_p.add_argument("--show-tail", action="store_true")
     verify_p.set_defaults(func=cmd_verify)
+
+    smoke_p = sub.add_parser(
+        "smoke",
+        help="run a content-free live capture smoke test",
+    )
+    smoke_p.add_argument("source")
+    smoke_p.set_defaults(func=cmd_smoke)
 
     extract_p = sub.add_parser("extract", help="write canonical clean artifacts")
     extract_p.add_argument("source")
