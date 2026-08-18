@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "Portable AI Context Capture",
+  "version": "0.1.0",
+  "description": "Capture allowlisted user/assistant conversation text as local JSONL for Portable AI Context.",
+  "permissions": [
+    "activeTab",
+    "scripting"
+  ],
+  "action": {
+    "default_title": "Portable AI Context Capture",
+    "default_popup": "popup.html"
+  }
+}
