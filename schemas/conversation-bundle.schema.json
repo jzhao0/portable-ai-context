@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/portable-ai-context/conversation-bundle.schema.json",
+  "title": "Portable AI Context Bundle Manifest",
+  "type": "object",
+  "required": ["schema_version", "created_at", "conversation", "artifacts"],
+  "properties": {
+    "schema_version": {"type": "string", "const": "0.1-alpha"},
+    "created_at": {"type": "string"},
+    "conversation": {
+      "type": "object",
+      "required": ["title", "message_count", "digest"],
+      "properties": {
+        "title": {"type": "string"},
+        "message_count": {"type": "integer", "minimum": 0},
+        "digest": {"type": "string"},
+        "source_kind": {"type": "string"}
+      },
+      "additionalProperties": true
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {"type": "string"}
+    }
+  },
+  "additionalProperties": true
+}

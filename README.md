@@ -1,2 +1,135 @@
-# portable-ai-context
-Privacy-aware, verifiable conversation-to-context migration for AI assistants.
+# Portable AI Context
+
+> **Working title / alpha.** Turn long AI conversations into privacy-aware, verifiable context packages another model can actually continue from.
+
+**Export is not migration. Preserve the state, not the transcript.**
+
+Portable AI Context (`paic`) is a local-first Python toolkit for extracting conversations from supported sources, normalizing them into a canonical schema, auditing privacy and completeness, exporting portable artifacts, and compiling long histories into migration prompts.
+
+## Why
+
+Long-running AI conversations accumulate decisions, corrections, commands, experiment results, preferences, and project state. Copying the raw transcript into a new model is often wasteful or impossible. Traditional exporters solve *serialization*; this project targets *handoff quality*.
+
+The design goals are:
+
+- **Portable:** source adapters normalize different conversation formats.
+- **Privacy-aware:** runtime/session metadata is excluded by whitelist; body-secret detection warns without printing secret values.
+- **Verifiable:** counts, message hashes, conversation digest, snapshot metadata, and tail hashes make truncation visible.
+- **Local-first:** extraction, normalization, inspection, and bundle creation need no AI API.
+- **Compiler-agnostic:** migration compilation uses an OpenAI-compatible backend today and is designed for more providers later.
+- **Cross-platform:** the core and CLI are Python 3.10+ and avoid OS-specific dependencies.
+
+## v0.1 alpha scope
+
+### Inputs
+
+- Migrator Clean HTML
+- compact TXT (`<<<USER>>>` / `<<<ASSISTANT>>>`)
+- JSONL (`role`, `text`)
+- saved ChatGPT share-page HTML / safe archive HTML
+- ChatGPT shared URL (**experimental**; browser fallback is best-effort)
+
+### Outputs
+
+- clean HTML
+- compact TXT
+- clean JSONL
+- `.aicb` portable bundle
+- integrity report
+- privacy report
+- optional migration prompt via OpenAI-compatible API
+
+### Not yet promised
+
+- Claude/Gemini/Grok adapters
+- browser extension
+- desktop GUI
+- stable `.aicb` schema
+- exact tokenizer-based context budgets
+- MCP handoff server
+
+Those belong on the roadmap, not in the v0.1 contract.
+
+## Quick start
+
+```bash
+python -m venv .venv
+source .venv/bin/activate  # Windows: .venv\\Scripts\\activate
+pip install -e .
+```
+
+Inspect a conversation:
+
+```bash
+paic inspect conversation.clean.html
+```
+
+Extract normalized artifacts:
+
+```bash
+paic extract conversation.clean.html -o out
+```
+
+Create a portable bundle:
+
+```bash
+paic bundle conversation.clean.html -o project.aicb
+```
+
+Verify integrity and tail metadata:
+
+```bash
+paic verify conversation.clean.html
+```
+
+Compile a migration prompt using an OpenAI-compatible API:
+
+```bash
+export PAIC_API_KEY='...'
+paic compile conversation.clean.html \\
+  --api-base https://api.example.com/v1 \\
+  --map-model fast-model \\
+  --final-model strong-model \\
+  -o migration
+```
+
+`paic` never requires API access for extraction, inspection, verification, or bundle creation.
+
+## Canonical model
+
+Every adapter produces a `Conversation` with:
+
+- source metadata
+- snapshot metadata when available
+- ordered messages
+- canonical roles
+- per-message metadata
+
+The initial bundle schema is documented in [`schemas/conversation-bundle.schema.json`](schemas/conversation-bundle.schema.json). It is explicitly **alpha** and may change before 1.0.
+
+## Privacy model
+
+Two different classes of secrets are treated differently:
+
+1. **Page/runtime secrets** — account/session/auth/bootstrap data that is not part of the conversation. Adapters use whitelists and do not emit it.
+2. **Secrets typed into the conversation body** — these are user content. `paic` detects suspicious patterns and reports counts, but does not silently rewrite history by default.
+
+See [`docs/privacy-model.md`](docs/privacy-model.md).
+
+## Project origin
+
+This project grew from a working proof of concept built to migrate a very long ChatGPT technical project. The PoC validated the need for snapshot checks, whitelist extraction, body-vs-runtime secret separation, hierarchical checkpoint compilation, and incremental state reuse. The public codebase is a clean-room modularization of those ideas; no private conversation fixture is included.
+
+## Development
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+## Status
+
+`0.1.0a1`: architecture/bootstrap milestone. APIs and schemas are not yet stable.
+
+## License
+
+MIT.
