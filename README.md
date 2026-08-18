@@ -30,6 +30,7 @@ The design goals are:
 - ChatGPT shared URL (**experimental**; browser fallback is best-effort)
 - single-conversation Claude JSON export subset (local `.json`; see [`docs/claude-adapter.md`](docs/claude-adapter.md))
 - Gemini Apps Google My Activity JSON subset (local `.json`; see [`docs/gemini-adapter.md`](docs/gemini-adapter.md))
+- browser-capture JSONL produced by the experimental Chromium extension in [`extension/`](extension/)
 
 ### Outputs
 
@@ -50,7 +51,7 @@ The design goals are:
 - reconstruction of original Gemini chat-thread boundaries from flat My Activity exports
 - localized Gemini activity prompt formats beyond the documented alpha subset
 - bundled model-specific exact tokenizer packages (exact counters can be injected through the compiler API)
-- browser extension
+- Firefox browser-capture support or signed browser-store distribution
 - desktop GUI
 - stable `.aicb` schema
 - MCP handoff server
@@ -102,6 +103,8 @@ paic compile conversation.clean.html \\
 ```
 
 Named final-prompt budgets are `lite` (4,000), `standard` (16,000), and `full` (64,000) tokens. You can instead use `--budget <tokens>`. The dependency-free CLI uses an explicit character/token estimate; exact tokenizer counters can be injected through the Python compiler API. See [`docs/token-budgets.md`](docs/token-budgets.md).
+
+For pages where direct capture is unreliable, the experimental Chromium browser extension uses only `activeTab` + `scripting`, previews message count and tail text before download, and exports canonical JSONL locally. See [`extension/README.md`](extension/README.md) and the [`browser-extension threat model`](docs/browser-extension-threat-model.md).
 
 `paic` never requires API access for extraction, inspection, verification, or bundle creation.
 
