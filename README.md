@@ -29,6 +29,7 @@ The design goals are:
 - saved ChatGPT share-page HTML / safe archive HTML
 - ChatGPT shared URL (**experimental**; browser fallback is best-effort)
 - single-conversation Claude JSON export subset (local `.json`; see [`docs/claude-adapter.md`](docs/claude-adapter.md))
+- Gemini Apps Google My Activity JSON subset (local `.json`; see [`docs/gemini-adapter.md`](docs/gemini-adapter.md))
 
 ### Outputs
 
@@ -42,9 +43,11 @@ The design goals are:
 
 ### Not yet promised
 
-- Gemini/Grok adapters
+- Grok adapter
 - automatic multi-conversation Claude archive selection
 - Claude shared-page HTML adapter
+- reconstruction of original Gemini chat-thread boundaries from flat My Activity exports
+- localized Gemini activity prompt formats beyond the documented alpha subset
 - browser extension
 - desktop GUI
 - stable `.aicb` schema
