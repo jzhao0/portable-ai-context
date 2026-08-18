@@ -14,6 +14,7 @@ The command performs the normal source load/capture path but prints only non-sen
 
 - operating-system family;
 - canonical source kind;
+- capture method (`direct_http` or `browser_fallback` for ChatGPT shared URLs);
 - message count;
 - snapshot update time and raw node count when available;
 - conversation digest;
@@ -23,9 +24,9 @@ It intentionally does **not** print the title, source locator/share URL, or any 
 
 ## Evidence to post on Issue #1
 
-Paste only the JSON emitted by `paic smoke`, plus the browser family used if browser fallback was required. Do not paste command history containing a private share URL.
+Paste only the JSON emitted by `paic smoke`. Do not paste command history containing a private share URL.
 
-A successful run should have `"ok": true`, a non-zero `message_count`, and stable 64-character SHA-256 digest/hash fields.
+A successful run should have `"ok": true`, a non-zero `message_count`, a capture method for ChatGPT shared URLs, and stable 64-character SHA-256 digest/hash fields.
 
 ## Private local validation
 

@@ -6,6 +6,7 @@ from pathlib import Path
 
 from portable_ai_context.adapters import chatgpt_share
 from portable_ai_context.errors import ParseError
+from portable_ai_context.models import Conversation, SourceInfo
 
 
 SHARE_ID = "6a7efdf6-abcc-83e8-9a7f-b0013d633f46"
@@ -76,13 +77,35 @@ class ChatGPTShareTests(unittest.TestCase):
             self.assertNotIn("--remote-debugging-port=9222", cmd)
             self.assertEqual(cmd[-1], FULL)
 
+    @patch.object(chatgpt_share, "_fetch_http")
+    def test_capture_reports_direct_http(self, fetch_http):
+        fetch_http.return_value = "streamController.enqueue linear_conversation"
+        html, method = chatgpt_share._capture(FULL)
+        self.assertEqual(html, "streamController.enqueue linear_conversation")
+        self.assertEqual(method, "direct_http")
+
     @patch.object(chatgpt_share, "_fetch_browser")
     @patch.object(chatgpt_share, "_fetch_http")
     def test_403_falls_back_to_browser(self, fetch_http, fetch_browser):
         fetch_http.side_effect = urllib.error.HTTPError(FULL, 403, "Forbidden", None, None)
         fetch_browser.return_value = "browser html"
-        self.assertEqual(chatgpt_share.fetch(FULL), "browser html")
+        html, method = chatgpt_share._capture(FULL)
+        self.assertEqual(html, "browser html")
+        self.assertEqual(method, "browser_fallback")
         fetch_browser.assert_called_once_with(FULL)
+        self.assertEqual(chatgpt_share.fetch(FULL), "browser html")
+
+    @patch.object(chatgpt_share.chatgpt_html, "load")
+    @patch.object(chatgpt_share, "_capture", return_value=("captured html", "direct_http"))
+    def test_load_records_capture_method(self, _capture, html_load):
+        html_load.return_value = Conversation(
+            title="test",
+            messages=[],
+            source=SourceInfo(kind="chatgpt_html"),
+        )
+        conv = chatgpt_share.load(FULL)
+        self.assertEqual(conv.source.kind, "chatgpt_share_url")
+        self.assertEqual(conv.source.metadata["capture_method"], "direct_http")
 
     @patch.object(chatgpt_share, "_fetch_browser")
     @patch.object(chatgpt_share, "_fetch_http")

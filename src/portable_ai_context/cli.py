@@ -57,6 +57,7 @@ def cmd_smoke(args) -> int:
         "ok": True,
         "platform": platform.system().lower(),
         "source_kind": conv.source.kind,
+        "capture_method": conv.source.metadata.get("capture_method"),
         "message_count": report.message_count,
         "snapshot_updated_at": report.snapshot_updated_at,
         "raw_node_count": report.raw_node_count,

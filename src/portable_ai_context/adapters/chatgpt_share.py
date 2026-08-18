@@ -268,7 +268,8 @@ def _fetch_browser(url: str, timeout: int = 60) -> str:
     raise ParseError("browser fallback failed; attempts=" + ",".join(failures[-6:]))
 
 
-def fetch(url: str) -> str:
+def _capture(url: str) -> tuple[str, str]:
+    """Capture a ChatGPT share and return (html, capture_method)."""
     url = normalize_share_input(url)
     if not is_share_url(url):
         raise ParseError("not a ChatGPT shared URL")
@@ -277,7 +278,7 @@ def fetch(url: str) -> str:
     try:
         text = _fetch_http(url)
         if chatgpt_html.can_load(text):
-            return text
+            return text, "direct_http"
         http_failure = "direct HTTP returned a page without conversation data"
     except urllib.error.HTTPError as exc:
         if exc.code not in {401, 403, 429}:
@@ -287,16 +288,22 @@ def fetch(url: str) -> str:
         http_failure = f"direct HTTP transport failed: {type(exc).__name__}"
 
     try:
-        return _fetch_browser(url)
+        return _fetch_browser(url), "browser_fallback"
     except ParseError as exc:
         detail = f"; {http_failure}" if http_failure else ""
         raise ParseError(f"ChatGPT shared-URL capture failed{detail}; browser fallback: {exc}") from exc
 
 
+def fetch(url: str) -> str:
+    html, _ = _capture(url)
+    return html
+
+
 def load(source: str) -> Conversation:
     url = normalize_share_input(source)
-    html = fetch(url)
+    html, capture_method = _capture(url)
     conv = chatgpt_html.load(url, html)
     conv.source.kind = "chatgpt_share_url"
     conv.source.locator = url
+    conv.source.metadata["capture_method"] = capture_method
     return conv
