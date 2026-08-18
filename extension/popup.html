@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Portable AI Context Capture</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main>
+    <h1>Portable AI Context</h1>
+    <p class="muted">Capture only allowlisted user/assistant DOM text from the active tab.</p>
+
+    <div class="actions">
+      <button id="capture" type="button">Inspect conversation</button>
+      <button id="download" type="button" disabled>Download JSONL</button>
+      <button id="clear" type="button" class="secondary" disabled>Clear</button>
+    </div>
+
+    <p id="status" role="status">Nothing captured yet.</p>
+
+    <section id="preview" hidden>
+      <dl>
+        <div>
+          <dt>Messages</dt>
+          <dd id="message-count">0</dd>
+        </div>
+        <div>
+          <dt>Adapter</dt>
+          <dd id="adapter">—</dd>
+        </div>
+      </dl>
+
+      <h2>Last user</h2>
+      <pre id="last-user">&lt;none&gt;</pre>
+
+      <h2>Last assistant</h2>
+      <pre id="last-assistant">&lt;none&gt;</pre>
+
+      <p class="warning">Conversation text is exported verbatim. If you typed a secret into the conversation, it remains conversation content; inspect before sharing the file.</p>
+    </section>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>

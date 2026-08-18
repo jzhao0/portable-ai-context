@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/portable-ai-context/browser-capture.schema.json",
+  "title": "Portable AI Context Browser Capture",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "ok",
+    "schema_version",
+    "adapter",
+    "message_count",
+    "ignored_role_nodes",
+    "empty_role_nodes",
+    "messages"
+  ],
+  "properties": {
+    "ok": {
+      "const": true
+    },
+    "schema_version": {
+      "const": "paic-browser-capture-1"
+    },
+    "adapter": {
+      "type": "string",
+      "minLength": 1
+    },
+    "message_count": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "ignored_role_nodes": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "empty_role_nodes": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "messages": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["role", "text", "index"],
+        "properties": {
+          "role": {
+            "enum": ["user", "assistant"]
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1
+          },
+          "index": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    }
+  }
+}
