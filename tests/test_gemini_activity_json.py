@@ -65,6 +65,8 @@ class GeminiActivityJsonAdapterTests(unittest.TestCase):
             "PRIVATE_AUDIO.m4a",
             "PRIVATE_IMAGE.webp",
             "PRIVATE_AUTHORIZATION_VALUE",
+            "PRIVATE_EMBEDDED_SCRIPT",
+            "PRIVATE_EMBEDDED_STYLE",
             "PRIVATE_NON_GEMINI_PROMPT",
             "PRIVATE_NON_GEMINI_RESPONSE",
         ]:
