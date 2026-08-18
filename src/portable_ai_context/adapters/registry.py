@@ -5,7 +5,7 @@ from pathlib import Path
 from portable_ai_context.errors import UnsupportedSourceError
 from portable_ai_context.models import Conversation
 from portable_ai_context.utils import read_text
-from . import chatgpt_share, chatgpt_html, clean_html, compact_txt, jsonl
+from . import chatgpt_share, chatgpt_html, claude_json, clean_html, compact_txt, jsonl
 
 
 def load_conversation(source: str) -> Conversation:
@@ -21,6 +21,9 @@ def load_conversation(source: str) -> Conversation:
 
     if suffix in {".jsonl", ".ndjson"}:
         return jsonl.load(str(path), text)
+
+    if suffix == ".json" and claude_json.can_load(text):
+        return claude_json.load(str(path), text)
 
     if suffix == ".txt" and compact_txt.can_load(text):
         return compact_txt.load(str(path), text)
