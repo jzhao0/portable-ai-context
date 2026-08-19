@@ -52,7 +52,7 @@
 
 ## v0.5 — Handoff integrations
 
-- [ ] MCP server
+- [x] MCP server (#46)
 - [ ] Claude Code / Codex / Cursor handoff recipes
 - [x] `.aicb` import/export core APIs (#29)
 
