@@ -35,6 +35,10 @@ jobs:
         with:
           ref: ${{ inputs.release_tag }}
           fetch-depth: 0
+      - name: Require tagged commit to be in main history
+        run: |
+          git fetch origin main --no-tags
+          git merge-base --is-ancestor HEAD origin/main
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
