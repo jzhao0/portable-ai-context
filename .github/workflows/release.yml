@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       mode:
-        description: dry-run builds/verifies only; publish enables PyPI + GitHub Release jobs
+        description: dry-run builds/verifies only; publish enables PyPI + attestation + GitHub Release jobs
         required: true
         default: dry-run
         type: choice
@@ -161,10 +161,63 @@ jobs:
           .published-smoke-venv/bin/python -m pip install --no-cache-dir "portable-ai-context==${{ needs.build.outputs.version }}"
           .published-smoke-venv/bin/python tools/package_smoke.py
 
-  github-release:
-    name: Create GitHub Release after PyPI verification
+  attest-published:
+    name: Attest and verify published release provenance
     if: ${{ inputs.mode == 'publish' }}
     needs: [build, verify-published]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.build.outputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+      - name: Require release tag to still point to the built commit before attestation
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          EXPECTED_COMMIT: ${{ needs.build.outputs.commit }}
+        run: |
+          git fetch origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG" --force
+          ACTUAL_COMMIT="$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")"
+          test "$ACTUAL_COMMIT" = "$EXPECTED_COMMIT"
+      - name: Download original build artifacts and checksums for attestation
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-dists-${{ inputs.release_tag }}
+          path: release-artifacts
+      - name: Recheck exact release subjects and local checksums before attestation
+        run: >-
+          python tools/verify_release_subjects.py
+          --version "${{ needs.build.outputs.version }}"
+          --artifacts-dir release-artifacts
+      - name: Create SLSA build provenance for the verified published subjects
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
+        with:
+          subject-path: |
+            release-artifacts/dist/portable_ai_context-${{ needs.build.outputs.version }}-py3-none-any.whl
+            release-artifacts/dist/portable_ai_context-${{ needs.build.outputs.version }}.tar.gz
+            release-artifacts/SHA256SUMS
+          create-storage-record: false
+      - name: Independently verify GitHub attestations for every subject
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          gh attestation verify "release-artifacts/dist/portable_ai_context-$VERSION-py3-none-any.whl" --repo "$GITHUB_REPOSITORY"
+          gh attestation verify "release-artifacts/dist/portable_ai_context-$VERSION.tar.gz" --repo "$GITHUB_REPOSITORY"
+          gh attestation verify "release-artifacts/SHA256SUMS" --repo "$GITHUB_REPOSITORY"
+
+  github-release:
+    name: Create GitHub Release after PyPI and provenance verification
+    if: ${{ inputs.mode == 'publish' }}
+    needs: [build, verify-published, attest-published]
     runs-on: ubuntu-latest
     permissions:
       contents: write
