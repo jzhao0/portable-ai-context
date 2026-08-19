@@ -1,9 +1,9 @@
 from pathlib import Path
-import os
 import tempfile
 import unittest
 
 from portable_ai_context.mcp_workspace import (
+    MCP_ALLOWED_SOURCE_SUFFIXES,
     MCP_ARTIFACT_DIRNAME,
     MCPWorkspace,
     MCPWorkspaceError,
@@ -26,6 +26,21 @@ class MCPWorkspaceTests(unittest.TestCase):
             resolved = workspace.resolve_source("nested/conversation.jsonl")
 
             self.assertEqual(resolved, source.resolve())
+
+    def test_public_source_suffix_contract_is_narrow(self):
+        self.assertEqual(
+            MCP_ALLOWED_SOURCE_SUFFIXES,
+            frozenset({".aicb", ".jsonl", ".json", ".txt", ".html"}),
+        )
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "legacy.ndjson").write_text('{"role":"user","text":"hi"}\n', encoding="utf-8")
+            (root / "legacy.htm").write_text("<html></html>", encoding="utf-8")
+            workspace = MCPWorkspace.from_root(root)
+            for value in ("legacy.ndjson", "legacy.htm"):
+                with self.subTest(value=value):
+                    with self.assertRaisesRegex(MCPWorkspaceError, "source type is not supported"):
+                        workspace.resolve_source(value)
 
     def test_rejects_unsafe_relative_path_forms_without_echo(self):
         with tempfile.TemporaryDirectory() as td:
@@ -132,12 +147,15 @@ class MCPWorkspaceTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "unsupported MCP artifact category"):
                 workspace.create_artifact_directory("PRIVATE_CATEGORY")
 
-    def test_unavailable_root_error_does_not_echo_path(self):
+    def test_unavailable_root_errors_are_content_safe(self):
         with tempfile.TemporaryDirectory() as td:
             missing = Path(td) / PRIVATE_PATH_TOKEN
             with self.assertRaises(MCPWorkspaceError) as caught:
                 MCPWorkspace.from_root(missing)
             self.assertNotIn(PRIVATE_PATH_TOKEN, str(caught.exception))
+
+        with self.assertRaisesRegex(MCPWorkspaceError, "workspace root is unavailable"):
+            MCPWorkspace.from_root(object())
 
 
 if __name__ == "__main__":
