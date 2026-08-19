@@ -8,6 +8,7 @@ import unittest
 from portable_ai_context.adapters import load_conversation
 from portable_ai_context.checkpoint import build_extractive_checkpoint
 from portable_ai_context.cli import main as cli_main
+from portable_ai_context.errors import PortableAIContextError
 from portable_ai_context.integrity import inspect as inspect_integrity
 from portable_ai_context.models import Conversation, Message, SourceInfo
 from portable_ai_context.privacy import BODY_PATTERNS, redact_body_text
@@ -88,8 +89,8 @@ class RedactBodyTextTests(unittest.TestCase):
         self.assertEqual(counts["private_key_header"], 0)
         self.assertEqual(set(BODY_PATTERNS), set(counts) - {"private_key_material"})
 
-    def test_multiple_adjacent_matches_are_counted_deterministically(self):
-        text = f"{OPENAI_KEY} {OPENAI_KEY}\n{GITHUB_TOKEN}{GITHUB_TOKEN}"
+    def test_multiple_nearby_matches_are_counted_deterministically(self):
+        text = f"{OPENAI_KEY} {OPENAI_KEY}\n{GITHUB_TOKEN} {GITHUB_TOKEN}"
         redacted, counts = redact_body_text(text)
         self.assertEqual(counts["openai_style_key"], 2)
         self.assertEqual(counts["github_token"], 2)
@@ -200,6 +201,20 @@ class RedactionReviewTests(unittest.TestCase):
         self.assertEqual(review.report.total_redaction_counts["openai_style_key"], 1)
         self.assertEqual(checkpoint.report.redaction_counts["openai_style_key"], 1)
         self.assertNotIn(OPENAI_KEY, checkpoint.markdown)
+
+    def test_invalid_canonical_structure_fails_with_content_free_error(self):
+        conversation = Conversation(
+            title=PRIVATE_TITLE,
+            source=SourceInfo(kind="PRIVATE/UNSAFE"),
+            messages=[Message(role="system", index=7, text=OPENAI_KEY)],
+        )
+        with self.assertRaises(PortableAIContextError) as caught:
+            build_redaction_review(conversation)
+        message = str(caught.exception)
+        self.assertIn("failed canonical structure", message)
+        self.assertNotIn(PRIVATE_TITLE, message)
+        self.assertNotIn(OPENAI_KEY, message)
+        self.assertNotIn("PRIVATE/UNSAFE", message)
 
 
 class RedactionCliTests(unittest.TestCase):
