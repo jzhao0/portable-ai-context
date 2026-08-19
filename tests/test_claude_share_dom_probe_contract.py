@@ -89,7 +89,7 @@ class ClaudeShareDOMProbeContractTests(unittest.TestCase):
         self.assertIn(ASSISTANT_SENTINEL, text)
         self.assertIn("support.claude.com/en/articles/10593882-share-and-unshare-chats", text)
         self.assertIn("The actual path/share identifier is never copied", text)
-        self.assertIn("does not export", text)
+        self.assertIn("The probe does **not** export:", text)
         self.assertIn("makes no network request", text)
         self.assertIn("private/authenticated Claude chat pages", text)
         self.assertIn("DOM completeness: not proven", text)
