@@ -36,6 +36,7 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         start = self.text.index("  pypi-publish:")
         end = self.text.index("\n  verify-published:", start)
         publish_job = self.text[start:end]
+        self.assertIn("needs: [build, prepublish-tag-check]", publish_job)
         self.assertIn(
             "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1",
             publish_job,
@@ -48,11 +49,25 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         self.assertNotIn("run:", publish_job)
 
     def test_checkout_credentials_are_not_persisted(self):
-        self.assertEqual(self.text.count("persist-credentials: false"), 2)
+        self.assertEqual(self.text.count("persist-credentials: false"), 3)
 
     def test_tagged_commit_must_be_in_main_history(self):
         self.assertIn("git merge-base --is-ancestor HEAD origin/main", self.text)
         self.assertIn('ref: ${{ inputs.release_tag }}', self.text)
+
+    def test_tag_identity_is_rechecked_before_and_after_publication(self):
+        self.assertIn("prepublish-tag-check:", self.text)
+        self.assertIn("Require release tag to still point to the built commit", self.text)
+        self.assertIn(
+            "Require release tag to still point to the built commit after publication",
+            self.text,
+        )
+        self.assertIn(
+            "Require release tag to still point to the built commit before GitHub Release",
+            self.text,
+        )
+        self.assertGreaterEqual(self.text.count('ref: ${{ needs.build.outputs.commit }}'), 2)
+        self.assertGreaterEqual(self.text.count('EXPECTED_COMMIT: ${{ needs.build.outputs.commit }}'), 3)
 
     def test_release_happens_after_pypi_hash_and_install_verification(self):
         self.assertIn("Verify PyPI file hashes match tagged build", self.text)
