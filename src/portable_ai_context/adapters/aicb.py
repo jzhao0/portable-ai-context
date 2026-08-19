@@ -27,7 +27,6 @@ MAX_MEMBER_COUNT = 8
 _SUPPORTED_COMPRESSION = frozenset({zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED})
 _HEX64_RE = re.compile(r"^[0-9a-f]{64}$")
 _SOURCE_KIND_RE = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
-_SAFE_METADATA_KEY_RE = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
 
 _CANONICAL_INTEGRITY_FIELDS = (
     "message_count",
@@ -209,12 +208,17 @@ def _validate_integrity_record(recorded: dict[str, Any], actual: dict[str, Any])
             raise _fail(f"integrity.json canonical field mismatch: {key}")
 
 
-def _validate_count_mapping(value: Any, *, name: str, allowed_keys: set[str] | None = None) -> dict[str, int]:
+def _validate_count_mapping(
+    value: Any,
+    *,
+    name: str,
+    allowed_keys: set[str] | None = None,
+) -> dict[str, int]:
     if not isinstance(value, dict):
         raise _fail(f"privacy.json {name} is invalid")
     result: dict[str, int] = {}
     for key, count in value.items():
-        if not isinstance(key, str) or not _SAFE_METADATA_KEY_RE.fullmatch(key):
+        if not isinstance(key, str):
             raise _fail(f"privacy.json {name} contains an invalid key")
         if allowed_keys is not None and key not in allowed_keys:
             raise _fail(f"privacy.json {name} contains an unexpected key")
@@ -224,10 +228,11 @@ def _validate_count_mapping(value: Any, *, name: str, allowed_keys: set[str] | N
     return result
 
 
-def _validate_privacy_record(recorded: dict[str, Any], conversation: Conversation) -> dict[str, int]:
-    runtime_counts = _validate_count_mapping(
-        recorded.get("runtime_marker_counts"), name="runtime_marker_counts"
-    )
+def _validate_privacy_record(recorded: dict[str, Any], conversation: Conversation) -> None:
+    # Runtime marker categories came from the original source adapter. They cannot
+    # be recomputed from canonical JSONL, so validate only the count shape and do
+    # not import their keys into the current bundle SourceInfo metadata.
+    _validate_count_mapping(recorded.get("runtime_marker_counts"), name="runtime_marker_counts")
     body_counts = _validate_count_mapping(
         recorded.get("body_secret_counts"),
         name="body_secret_counts",
@@ -244,7 +249,6 @@ def _validate_privacy_record(recorded: dict[str, Any], conversation: Conversatio
         raise _fail("privacy.json body-secret counts do not match canonical content")
     if safe_flag != recomputed.safe_to_share_automatically:
         raise _fail("privacy.json share-safety flag does not match canonical content")
-    return runtime_counts
 
 
 def _file_sha256(path: Path) -> str:
@@ -300,7 +304,7 @@ def load(source: str) -> Conversation:
     _validate_integrity_record(recorded_integrity, actual_integrity)
 
     recorded_privacy = _load_json_object("privacy.json", payloads["privacy.json"])
-    runtime_counts = _validate_privacy_record(recorded_privacy, conversation)
+    _validate_privacy_record(recorded_privacy, conversation)
 
     conversation.source = SourceInfo(
         kind=SOURCE_KIND,
@@ -310,7 +314,6 @@ def load(source: str) -> Conversation:
             "bundle_schema_version": SCHEMA_VERSION,
             "bundle_original_source_kind": original_source_kind,
             "bundle_integrity_verified": True,
-            "bundle_recorded_runtime_marker_counts": runtime_counts,
         },
     )
     return conversation
