@@ -37,7 +37,7 @@
 - [x] Pluggable compiler backend registry / CLI boundary (#31)
 - [x] Anthropic Messages backend (#33)
 - [x] Gemini generateContent backend (#35)
-- [ ] Ollama / local model backend
+- [x] Ollama / local model backend (#37)
 - [x] Deterministic no-AI extractive checkpoint mode (#27)
 
 ## v0.4 — Capture UX
