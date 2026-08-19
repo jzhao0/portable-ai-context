@@ -8,7 +8,6 @@ import stat
 from typing import Any
 import zipfile
 
-from portable_ai_context.conformance import SOURCE_KIND_RE
 from portable_ai_context.errors import ParseError
 from portable_ai_context.integrity import inspect as inspect_integrity
 from portable_ai_context.models import Conversation, SourceInfo
@@ -27,6 +26,7 @@ MAX_TOTAL_UNCOMPRESSED_BYTES = 128 * 1024 * 1024
 MAX_MEMBER_COUNT = 8
 _SUPPORTED_COMPRESSION = frozenset({zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED})
 _HEX64_RE = re.compile(r"^[0-9a-f]{64}$")
+_SOURCE_KIND_RE = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
 _SAFE_METADATA_KEY_RE = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
 
 _CANONICAL_INTEGRITY_FIELDS = (
@@ -162,7 +162,7 @@ def _validate_manifest(manifest: dict[str, Any]) -> tuple[str, int, str, str]:
         raise _fail("manifest message count is invalid")
     if not isinstance(digest, str) or not _HEX64_RE.fullmatch(digest):
         raise _fail("manifest conversation digest is invalid")
-    if not isinstance(original_source_kind, str) or not SOURCE_KIND_RE.fullmatch(original_source_kind):
+    if not isinstance(original_source_kind, str) or not _SOURCE_KIND_RE.fullmatch(original_source_kind):
         raise _fail("manifest original source kind is not a safe identifier")
     return title, message_count, digest, original_source_kind
 
