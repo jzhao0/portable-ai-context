@@ -12,6 +12,7 @@ from .adapters import load_conversation
 from .checkpoint import MIN_BUDGET_TOKENS, build_extractive_checkpoint
 from .compiler import (
     DEFAULT_ANTHROPIC_MAX_TOKENS,
+    DEFAULT_GEMINI_MAX_OUTPUT_TOKENS,
     BackendConfig,
     compile_migration,
     create_backend,
@@ -158,7 +159,10 @@ def cmd_compile(args) -> int:
             api_key_env=args.api_key_env,
             timeout=args.timeout,
             environment=os.environ,
-            options={"anthropic_max_tokens": args.anthropic_max_tokens},
+            options={
+                "anthropic_max_tokens": args.anthropic_max_tokens,
+                "gemini_max_output_tokens": args.gemini_max_output_tokens,
+            },
         ),
     )
     out = Path(args.output)
@@ -269,7 +273,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     compile_p.add_argument(
         "--api-base",
-        help="provider API base URL; required by openai-compatible, optional for anthropic",
+        help="provider API base URL; required by openai-compatible, optional for anthropic/gemini",
     )
     compile_p.add_argument("--api-key-env", default="PAIC_API_KEY")
     compile_p.add_argument("--map-model", required=True)
@@ -281,6 +285,15 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Anthropic Messages API max_tokens per completion "
             f"(default: {DEFAULT_ANTHROPIC_MAX_TOKENS})"
+        ),
+    )
+    compile_p.add_argument(
+        "--gemini-max-output-tokens",
+        type=_positive_int,
+        default=DEFAULT_GEMINI_MAX_OUTPUT_TOKENS,
+        help=(
+            "Gemini generateContent maxOutputTokens per completion "
+            f"(default: {DEFAULT_GEMINI_MAX_OUTPUT_TOKENS})"
         ),
     )
     compile_p.add_argument("--chunk-chars", type=_positive_int, default=120000)
