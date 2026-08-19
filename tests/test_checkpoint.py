@@ -96,7 +96,10 @@ class DeterministicCheckpointTests(unittest.TestCase):
         self.assertIn(2, result.report.selected_indices)
         self.assertEqual(result.report.selected_indices, sorted(result.report.selected_indices))
         self.assertIn("下一步", result.markdown)
-        self.assertIn("selection_reason: state_marker", result.markdown)
+        self.assertRegex(
+            result.markdown,
+            r"(?s)### SOURCE MESSAGE 3 \[USER\].*?- state_marker_hits: [1-9][0-9]*",
+        )
         self.assertIn("selection_reason: latest_user", result.markdown)
         self.assertIn("selection_reason: latest_assistant", result.markdown)
 
