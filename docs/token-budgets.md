@@ -42,7 +42,7 @@ The compiler operates against a small `TokenCounter` interface with:
 
 - `count(text) -> int`;
 - a counter name;
-- an `exact` flag indicating whether the count is exact for its intended tokenizer or an estimate.
+- an `exact` flag indicating whether the count is exact for its intended tokenizer/request-count contract or an estimate.
 
 ### Dependency-free default
 
@@ -92,7 +92,7 @@ Explicit encoding wins over model lookup.
 
 If the optional dependency is absent, PAIC returns a concise install hint rather than making every base installation depend on tiktoken.
 
-## What `tokenizer_exact=true` means
+## What `tokenizer_exact=true` means for tiktoken
 
 For `TiktokenTokenCounter`, `exact=true` has a deliberately narrow definition:
 
@@ -104,6 +104,99 @@ The counter uses tiktoken's ordinary-text encoding path. Text that merely looks 
 
 `tiktoken` is an optional external tokenizer package. Depending on its own cache state/version, initializing an encoding may require tiktoken to populate its tokenizer data cache; PAIC does not vendor or silently invent encoding tables.
 
+## Opt-in provider-native input counting
+
+For the built-in Anthropic and Gemini compiler backends, PAIC can instead ask the selected provider to count each text value as **one user-role input using `--final-model`**:
+
+```text
+--token-counter provider-native
+```
+
+This mode is available only with:
+
+```text
+--backend anthropic
+--backend gemini
+```
+
+It deliberately reuses the already-created compiler backend, including the same API key, API base, timeout, and provider headers. There is no second token-counter credential path.
+
+### Anthropic
+
+PAIC calls:
+
+```text
+POST /v1/messages/count_tokens
+```
+
+with the selected final model and one user message containing the text being counted.
+
+The compile report uses a name such as:
+
+```text
+anthropic_count_tokens:claude-sonnet-...
+```
+
+and reports:
+
+```text
+tokenizer_exact = false
+```
+
+This is intentional. Anthropic documents its token-count result as an **estimate** that can differ slightly from actual message input usage and can include automatically added provider tokens. PAIC does not relabel that estimate as exact.
+
+### Gemini
+
+PAIC calls the selected model's:
+
+```text
+models/...:countTokens
+```
+
+with one user `Content` containing the text being counted.
+
+The compile report uses a name such as:
+
+```text
+gemini_count_tokens:gemini-...
+```
+
+and reports:
+
+```text
+tokenizer_exact = true
+```
+
+Here `exact=true` has a narrow provider-request meaning:
+
+> The value is the Gemini `countTokens` result for that selected model and one-user-content request shape at call time.
+
+It is not a bundled/offline tokenizer guarantee and is not a claim about output, thinking, cached, tool, image, audio, video, or billing-token totals.
+
+### Network and privacy boundary
+
+`provider-native` is **not** a local tokenizer. Each `count(text)` call sends that text to the configured provider count endpoint.
+
+During a normal compile, PAIC counts at least:
+
+1. the full rendered source conversation for the source count;
+2. the generated final migration prompt for the output count;
+3. the reduced final prompt as an additional count if a budget-reduction pass occurs.
+
+This matters with `--state`: even when incremental compilation can avoid regenerating map notes for unchanged old messages, provider-native source counting still sends the full rendered source text to the count endpoint. Choose this mode only when that network disclosure is acceptable.
+
+The default `character` mode and optional `tiktoken` mode do not gain this provider-count network behavior.
+
+Custom `--api-base` values retain the same trust boundary as the matching compiler backend: the configured endpoint receives the API credential and the counted text.
+
+### Compatibility rules
+
+`--tokenizer-model` and `--tiktoken-encoding` remain tiktoken-only. PAIC rejects them when `provider-native` is selected rather than silently mixing two counting contracts.
+
+Provider-native counting is not added to `paic checkpoint`; deterministic checkpoint mode remains offline/no-AI.
+
+PAIC does not currently invent native count-only adapters for OpenAI-compatible endpoints or Ollama. Those ecosystems do not provide one sufficiently uniform count-only contract through the interfaces PAIC currently targets.
+
 ## Why PAIC does not claim universal offline exact counting
 
 Compiler providers do not expose the same token-count contract:
@@ -113,7 +206,7 @@ Compiler providers do not expose the same token-count contract:
 - Gemini exposes model-native `models.countTokens`, which is a provider API operation rather than a bundled offline tokenizer.
 - Ollama exposes actual `prompt_eval_count` / `eval_count` usage on model execution responses, but the native API does not provide one universal count-only tokenizer endpoint for every local model.
 
-Provider-native/network counters can therefore be added separately without mislabeling them as the same kind of local exact tokenizer.
+The network counters therefore remain distinct from local raw-text tokenizers even though both satisfy PAIC's small `TokenCounter` interface.
 
 ## Python API
 
@@ -146,6 +239,19 @@ from portable_ai_context.compiler import TiktokenTokenCounter
 counter = TiktokenTokenCounter(encoding_name="o200k_base")
 ```
 
+Provider-native counting can be constructed around a supported built-in backend:
+
+```python
+from portable_ai_context.compiler import ProviderNativeTokenCounter
+
+counter = ProviderNativeTokenCounter(
+    backend=backend,
+    model="gemini-...",
+)
+```
+
+The backend must expose PAIC's reviewed Anthropic or Gemini native count contract.
+
 ## Continuation priority under pressure
 
 When a budget is configured, the final compiler is told to preserve continuation-critical state before background detail. If the first final prompt exceeds the configured budget, the compiler performs one additional budget-reduction pass with this priority:
@@ -172,7 +278,9 @@ Every compile writes `compile-report.json`. It includes:
 - `budget_met`;
 - whether `budget_reduction_applied`.
 
-The field names use `estimate` even when a counter is exact so report consumers can use one stable schema; `tokenizer_exact` distinguishes exact raw-text tokenizer counts from estimated counts.
+The field names use `estimate` even when a counter is exact so report consumers can use one stable schema; `tokenizer_exact` distinguishes the selected counter's declared semantics.
+
+For provider-native mode, remember that `source_token_estimate` and `output_token_estimate` are one-user-input request counts, not local raw-text lengths.
 
 ## Character fallback compatibility
 
