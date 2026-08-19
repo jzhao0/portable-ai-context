@@ -34,7 +34,7 @@ class _Response:
         return self.body
 
 
-def _response_body(*, finish_reason="STOP", parts=None, candidates=None, prompt_feedback=None):
+def _response_body(*, finish_reason="STOP", parts=None, candidates=None):
     if candidates is None:
         if parts is None:
             parts = [{"text": "SAFE RESULT"}]
@@ -45,10 +45,7 @@ def _response_body(*, finish_reason="STOP", parts=None, candidates=None, prompt_
                 "index": 0,
             }
         ]
-    value = {"candidates": candidates}
-    if prompt_feedback is not None:
-        value["promptFeedback"] = prompt_feedback
-    return json.dumps(value).encode("utf-8")
+    return json.dumps({"candidates": candidates}).encode("utf-8")
 
 
 class GeminiBackendTransportTests(unittest.TestCase):
@@ -72,7 +69,7 @@ class GeminiBackendTransportTests(unittest.TestCase):
             stage="map",
         )
 
-    def _assert_content_safe(self, message, *extra_private_values):
+    def _assert_content_safe(self, message: str, *extra_private_values: str):
         for value in (
             self.api_key,
             self.api_base,
@@ -82,7 +79,7 @@ class GeminiBackendTransportTests(unittest.TestCase):
         ):
             self.assertNotIn(value, message)
 
-    def test_request_matches_generate_content_contract(self):
+    def test_request_matches_raw_generate_content_contract(self):
         captured = {}
 
         def fake_urlopen(request, timeout):
@@ -104,15 +101,17 @@ class GeminiBackendTransportTests(unittest.TestCase):
         )
         self.assertEqual(request.get_method(), "POST")
         self.assertEqual(captured["timeout"], 19)
+
         headers = {key.lower(): value for key, value in request.header_items()}
         self.assertEqual(headers["content-type"], "application/json")
         self.assertEqual(headers["x-goog-api-key"], self.api_key)
 
         payload = json.loads(request.data.decode("utf-8"))
         self.assertEqual(
-            payload["systemInstruction"],
+            payload["system_instruction"],
             {"parts": [{"text": self.system}]},
         )
+        self.assertNotIn("systemInstruction", payload)
         self.assertEqual(
             payload["contents"],
             [{"role": "user", "parts": [{"text": self.user}]}],
@@ -140,15 +139,25 @@ class GeminiBackendTransportTests(unittest.TestCase):
             self.api_base + "/models/gemini-safe_1.2:generateContent",
         )
 
-    def test_unsafe_model_path_is_rejected_without_echo(self):
-        private_model = "models/../../PRIVATE_MODEL?key=PRIVATE_QUERY"
-        with self.assertRaises(CompilerError) as caught:
-            self._complete(private_model)
-        self.assertEqual(str(caught.exception), "gemini backend model identifier is invalid")
-        self.assertNotIn("PRIVATE_MODEL", str(caught.exception))
-        self.assertNotIn("PRIVATE_QUERY", str(caught.exception))
+    def test_unsafe_model_paths_are_rejected_without_echo(self):
+        unsafe = (
+            "models/../../PRIVATE_MODEL?key=PRIVATE_QUERY",
+            "models/gemini-safe/extra",
+            "gemini-safe#PRIVATE_FRAGMENT",
+            "gemini-safe?PRIVATE_QUERY=1",
+            "",
+        )
+        for model in unsafe:
+            with self.subTest(model=model):
+                with self.assertRaises(CompilerError) as caught:
+                    self._complete(model)
+                self.assertEqual(
+                    str(caught.exception),
+                    "gemini backend model identifier is invalid",
+                )
+                self.assertNotIn("PRIVATE", str(caught.exception))
 
-    def test_multiple_final_text_parts_are_joined_and_thoughts_ignored(self):
+    def test_multiple_final_text_parts_join_and_thought_metadata_is_not_output(self):
         private_thought = "PRIVATE_THOUGHT_SUMMARY"
         private_signature = "PRIVATE_THOUGHT_SIGNATURE"
         body = _response_body(
@@ -164,10 +173,32 @@ class GeminiBackendTransportTests(unittest.TestCase):
             return_value=_Response(body),
         ):
             result = self._complete()
+
         self.assertEqual(result, "first\nsecond")
         self.assertNotIn(private_thought, result)
         self.assertNotIn(private_signature, result)
         self.assertNotIn("PRIVATE_TOOL_NAME", result)
+
+    def test_malformed_thought_metadata_is_rejected(self):
+        private_text = "PRIVATE_TEXT_WITH_MALFORMED_THOUGHT_FLAG"
+        body = _response_body(parts=[{"text": private_text, "thought": "true"}])
+        with mock.patch(
+            "portable_ai_context.compiler.gemini.urllib.request.urlopen",
+            return_value=_Response(body),
+        ):
+            with self.assertRaises(CompilerError) as caught:
+                self._complete()
+
+        self.assertEqual(str(caught.exception), "unexpected Gemini response shape")
+        self.assertNotIn(private_text, str(caught.exception))
+
+    def test_false_thought_flag_preserves_final_text(self):
+        body = _response_body(parts=[{"text": "visible", "thought": False}])
+        with mock.patch(
+            "portable_ai_context.compiler.gemini.urllib.request.urlopen",
+            return_value=_Response(body),
+        ):
+            self.assertEqual(self._complete(), "visible")
 
     def test_max_tokens_is_explicit_truncation_failure(self):
         private_finish_message = "PRIVATE_FINISH_MESSAGE"
@@ -188,12 +219,16 @@ class GeminiBackendTransportTests(unittest.TestCase):
         ):
             with self.assertRaises(CompilerError) as caught:
                 self._complete()
-        self.assertEqual(str(caught.exception), "gemini backend output reached maxOutputTokens")
+
+        self.assertEqual(
+            str(caught.exception),
+            "gemini backend output reached maxOutputTokens",
+        )
         self._assert_content_safe(
             str(caught.exception), private_finish_message, "PRIVATE_PARTIAL_TEXT"
         )
 
-    def test_current_blocked_finish_reasons_fail_closed_without_echo(self):
+    def test_current_blocked_finish_reasons_fail_closed(self):
         blocked = (
             "SAFETY",
             "RECITATION",
@@ -221,7 +256,10 @@ class GeminiBackendTransportTests(unittest.TestCase):
                 ):
                     with self.assertRaises(CompilerError) as caught:
                         self._complete()
-                self.assertEqual(str(caught.exception), "gemini backend candidate was blocked")
+                self.assertEqual(
+                    str(caught.exception),
+                    "gemini backend candidate was blocked",
+                )
                 self.assertNotIn("PRIVATE_BLOCKED_TEXT", str(caught.exception))
 
     def test_non_text_or_incomplete_finish_reasons_fail_closed(self):
@@ -281,6 +319,7 @@ class GeminiBackendTransportTests(unittest.TestCase):
         ):
             with self.assertRaises(CompilerError) as caught:
                 self._complete()
+
         self.assertEqual(str(caught.exception), "gemini backend prompt was blocked")
         self.assertNotIn(private_reason, str(caught.exception))
         self.assertNotIn(private_message, str(caught.exception))
@@ -293,14 +332,22 @@ class GeminiBackendTransportTests(unittest.TestCase):
             with self.assertRaisesRegex(CompilerError, "returned no candidate"):
                 self._complete()
 
-    def test_candidate_cardinality_and_response_shape_fail_cleanly(self):
+    def test_candidate_cardinality_and_shape_fail_cleanly(self):
         bodies = [
             json.dumps([]).encode("utf-8"),
             json.dumps({"candidates": {"private": "value"}}).encode("utf-8"),
             _response_body(candidates=[{}, {}]),
             _response_body(candidates=["PRIVATE_CANDIDATE"]),
-            _response_body(candidates=[{"finishReason": "STOP", "content": "PRIVATE"}]),
-            _response_body(candidates=[{"finishReason": "STOP", "content": {"parts": "PRIVATE"}}]),
+            _response_body(
+                candidates=[{"finishReason": "STOP", "content": "PRIVATE"}]
+            ),
+            _response_body(
+                candidates=[
+                    {"finishReason": "STOP", "content": {"parts": "PRIVATE"}}
+                ]
+            ),
+            _response_body(parts=["PRIVATE_PART"]),
+            _response_body(parts=[{"text": 123}]),
         ]
         for body in bodies:
             with self.subTest(body=body[:30]):
@@ -320,11 +367,10 @@ class GeminiBackendTransportTests(unittest.TestCase):
                 self.assertNotIn("PRIVATE", str(caught.exception))
 
     def test_success_without_final_text_fails_without_echoing_non_text_payload(self):
-        private_tool = "PRIVATE_TOOL_PAYLOAD"
         body = _response_body(
             parts=[
                 {"text": "PRIVATE_THOUGHT", "thought": True},
-                {"functionCall": {"name": private_tool}},
+                {"functionCall": {"name": "PRIVATE_TOOL_PAYLOAD"}},
             ]
         )
         with mock.patch(
@@ -333,9 +379,12 @@ class GeminiBackendTransportTests(unittest.TestCase):
         ):
             with self.assertRaises(CompilerError) as caught:
                 self._complete()
-        self.assertEqual(str(caught.exception), "gemini backend returned no text content")
-        self.assertNotIn(private_tool, str(caught.exception))
-        self.assertNotIn("PRIVATE_THOUGHT", str(caught.exception))
+
+        self.assertEqual(
+            str(caught.exception),
+            "gemini backend returned no text content",
+        )
+        self.assertNotIn("PRIVATE", str(caught.exception))
 
     def test_invalid_json_does_not_echo_response_body(self):
         private_body = b"PRIVATE_INVALID_GEMINI_JSON {"
@@ -345,7 +394,11 @@ class GeminiBackendTransportTests(unittest.TestCase):
         ):
             with self.assertRaises(CompilerError) as caught:
                 self._complete()
-        self.assertEqual(str(caught.exception), "gemini backend returned invalid JSON")
+
+        self.assertEqual(
+            str(caught.exception),
+            "gemini backend returned invalid JSON",
+        )
         self._assert_content_safe(str(caught.exception), private_body.decode("utf-8"))
 
     def test_http_error_reports_only_status(self):
@@ -363,6 +416,7 @@ class GeminiBackendTransportTests(unittest.TestCase):
         ):
             with self.assertRaises(CompilerError) as caught:
                 self._complete()
+
         self.assertEqual(str(caught.exception), "gemini backend HTTP status 429")
         self._assert_content_safe(str(caught.exception), private_body, "PRIVATE_HTTP_REASON")
         self.assertIs(caught.exception.__cause__, error)
@@ -376,6 +430,7 @@ class GeminiBackendTransportTests(unittest.TestCase):
         ):
             with self.assertRaises(CompilerError) as caught:
                 self._complete()
+
         self.assertEqual(str(caught.exception), "gemini backend transport failed")
         self._assert_content_safe(str(caught.exception), private_reason)
         self.assertIs(caught.exception.__cause__, error)
@@ -393,9 +448,12 @@ class GeminiBackendRegistryTests(unittest.TestCase):
         )
         self.assertIsInstance(backend, GeminiBackend)
         self.assertEqual(backend.api_base, DEFAULT_GEMINI_API_BASE)
-        self.assertEqual(backend.max_output_tokens, DEFAULT_GEMINI_MAX_OUTPUT_TOKENS)
+        self.assertEqual(
+            backend.max_output_tokens,
+            DEFAULT_GEMINI_MAX_OUTPUT_TOKENS,
+        )
 
-    def test_factory_accepts_custom_base_max_output_tokens_and_timeout(self):
+    def test_factory_accepts_custom_base_tokens_and_timeout(self):
         backend = create_backend(
             "gemini",
             BackendConfig(
@@ -406,7 +464,10 @@ class GeminiBackendRegistryTests(unittest.TestCase):
                 options={"gemini_max_output_tokens": 1234},
             ),
         )
-        self.assertEqual(backend.api_base, "https://gateway.example/gemini/v1beta")
+        self.assertEqual(
+            backend.api_base,
+            "https://gateway.example/gemini/v1beta",
+        )
         self.assertEqual(backend.max_output_tokens, 1234)
         self.assertEqual(backend.timeout, 23)
 
@@ -414,7 +475,8 @@ class GeminiBackendRegistryTests(unittest.TestCase):
         for value in (0, -1, True, "4096"):
             with self.subTest(value=value):
                 with self.assertRaisesRegex(
-                    CompilerError, "maxOutputTokens must be a positive integer"
+                    CompilerError,
+                    "maxOutputTokens must be a positive integer",
                 ):
                     create_backend(
                         "gemini",
@@ -431,7 +493,7 @@ class _RecordingBackend:
 
 
 class GeminiBackendCliTests(unittest.TestCase):
-    def test_cli_forwards_gemini_max_output_tokens_through_backend_options(self):
+    def test_cli_forwards_gemini_max_output_tokens(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             source = root / "source.jsonl"
@@ -444,7 +506,10 @@ class GeminiBackendCliTests(unittest.TestCase):
             )
             out = root / "out"
             backend = _RecordingBackend()
-            with mock.patch("portable_ai_context.cli.create_backend", return_value=backend) as create:
+            with mock.patch(
+                "portable_ai_context.cli.create_backend",
+                return_value=backend,
+            ) as create:
                 with contextlib.redirect_stdout(io.StringIO()):
                     code = cli_main(
                         [
@@ -464,6 +529,7 @@ class GeminiBackendCliTests(unittest.TestCase):
                             "final-model",
                         ]
                     )
+
         self.assertEqual(code, 0)
         backend_name, config = create.call_args.args
         self.assertEqual(backend_name, "gemini")
