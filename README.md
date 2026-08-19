@@ -59,7 +59,7 @@ The design goals are:
 - Firefox browser-capture support or signed browser-store distribution
 - desktop GUI
 - stable `.aicb` schema
-- host-specific Claude Code / Codex / Cursor handoff recipes
+- live Claude Code / Codex / Cursor host validation beyond the documented static handoff recipes
 
 Those belong on the roadmap, not in the v0.1 contract.
 
@@ -90,6 +90,8 @@ paic mcp --root /path/to/workspace
 ```
 
 It exposes only `inspect_source`, `conform_source`, `build_checkpoint`, and `build_redaction_review`. Source arguments are root-relative local PAIC sources, and generated artifacts are written only under the server-owned `.paic-mcp/` area. The MCP server does **not** expose arbitrary file reads/listing, raw conversation text, `paic compile`, provider/network calls, shell execution, or arbitrary output paths. PAIC enforces its own resolved-path root boundary and does not rely on MCP Roots as authorization. See [`docs/mcp-server.md`](docs/mcp-server.md).
+
+Conservative host-specific setup recipes for Claude Code, Codex, and Cursor are documented in [`docs/mcp-handoff-recipes.md`](docs/mcp-handoff-recipes.md), with inert examples under [`examples/mcp/`](examples/mcp/). The repository statically validates those configuration shapes; this is not a claim that all three third-party hosts were live-smoke-tested against PAIC.
 
 Confirm the installed CLI version:
 
@@ -231,7 +233,7 @@ The deterministic checkpoint and explicit `paic redact` review share one pattern
 
 Compiler transport tests are deterministic and do not spend live provider API keys in CI. Anthropic is validated against the Messages contract with mocked HTTP, Gemini against the stateless `generateContent` contract, and Ollama against native `/api/chat`. CI does not install/start Ollama or run model compute; a real local-model smoke is separate optional validation on a machine where Ollama was intentionally installed.
 
-The package job first proves that the base built wheel does not install tiktoken or MCP, then explicitly installs optional extras from the **same built wheel**. It smoke-tests a real tiktoken encoding/model mapping and uses the official MCP SDK `Client(server)` in memory to verify exactly four PAIC tools, zero resources, content-free inspect/conform results, server-owned checkpoint/redaction writes, and content-safe traversal errors without starting a network listener. The base installed-wheel smoke also runs `paic redact` on a synthetic fake-secret fixture and verifies that the content-free report does not echo that fake secret. Provider-native token-count API coverage and host-specific MCP client recipes remain separate future work.
+The package job first proves that the base built wheel does not install tiktoken or MCP, then explicitly installs optional extras from the **same built wheel**. It smoke-tests a real tiktoken encoding/model mapping and uses the official MCP SDK `Client(server)` in memory to verify exactly four PAIC tools, zero resources, content-free inspect/conform results, server-owned checkpoint/redaction writes, and content-safe traversal errors without starting a network listener. The base installed-wheel smoke also runs `paic redact` on a synthetic fake-secret fixture and verifies that the content-free report does not echo that fake secret. Provider-native token-count API coverage remains separate future work. Claude Code, Codex, and Cursor handoff examples are statically constrained against their documented stdio configuration shapes; live host connection evidence remains separate and must not be inferred from those static tests.
 
 See [`docs/release-readiness-0.1.0a2.md`](docs/release-readiness-0.1.0a2.md) for the full evidence ledger and known alpha limitations.
 

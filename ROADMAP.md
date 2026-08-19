@@ -53,7 +53,7 @@
 ## v0.5 — Handoff integrations
 
 - [x] MCP server (#46)
-- [ ] Claude Code / Codex / Cursor handoff recipes
+- [x] Claude Code / Codex / Cursor handoff recipes (#49)
 - [x] `.aicb` import/export core APIs (#29)
 
 ## v1.0 — Stable portability contract

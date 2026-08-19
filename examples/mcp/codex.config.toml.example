@@ -1,0 +1,6 @@
+# Inert example only. Review and copy into your own Codex config if desired.
+# Replace the generic placeholder with the workspace PAIC is allowed to inspect.
+
+[mcp_servers.paic]
+command = "paic"
+args = ["mcp", "--root", "/ABSOLUTE/PATH/TO/WORKSPACE"]
