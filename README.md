@@ -59,7 +59,7 @@ The design goals are:
 - Firefox browser-capture support or signed browser-store distribution
 - desktop GUI
 - stable `.aicb` schema
-- MCP handoff server
+- host-specific Claude Code / Codex / Cursor handoff recipes
 
 Those belong on the roadmap, not in the v0.1 contract.
 
@@ -76,6 +76,20 @@ The base install remains dependency-free. Optional local exact raw-text counting
 ```bash
 pip install -e '.[tokenizers]'
 ```
+
+Optional local MCP handoff support is available with:
+
+```bash
+pip install -e '.[mcp]'
+```
+
+The MCP alpha is stdio-only and requires an explicit workspace root:
+
+```bash
+paic mcp --root /path/to/workspace
+```
+
+It exposes only `inspect_source`, `conform_source`, `build_checkpoint`, and `build_redaction_review`. Source arguments are root-relative local PAIC sources, and generated artifacts are written only under the server-owned `.paic-mcp/` area. The MCP server does **not** expose arbitrary file reads/listing, raw conversation text, `paic compile`, provider/network calls, shell execution, or arbitrary output paths. PAIC enforces its own resolved-path root boundary and does not rely on MCP Roots as authorization. See [`docs/mcp-server.md`](docs/mcp-server.md).
 
 Confirm the installed CLI version:
 
@@ -203,7 +217,7 @@ Named checkpoint/compiler budgets are `lite` (4,000), `standard` (16,000), and `
 
 For pages where direct capture is unreliable, the experimental Chromium browser extension uses only `activeTab` + `scripting`, previews message count and tail text before download, and exports canonical JSONL locally. See [`extension/README.md`](extension/README.md) and the [`browser-extension threat model`](docs/browser-extension-threat-model.md).
 
-`paic` never requires API access for extraction, inspection, conformance checking, deterministic checkpoint generation, pattern-limited redaction review, verification, or bundle creation/import. Only AI-assisted `paic compile` requires a model backend. The optional tiktoken counter performs tokenizer computation locally, although tiktoken itself may populate its encoding-data cache when an encoding is initialized.
+`paic` never requires API access for extraction, inspection, conformance checking, deterministic checkpoint generation, pattern-limited redaction review, verification, bundle creation/import, or the stdio-only MCP orchestration of those local operations. Only AI-assisted `paic compile` requires a model backend. The optional tiktoken counter performs tokenizer computation locally, although tiktoken itself may populate its encoding-data cache when an encoding is initialized.
 
 ## Verification status
 
@@ -217,7 +231,7 @@ The deterministic checkpoint and explicit `paic redact` review share one pattern
 
 Compiler transport tests are deterministic and do not spend live provider API keys in CI. Anthropic is validated against the Messages contract with mocked HTTP, Gemini against the stateless `generateContent` contract, and Ollama against native `/api/chat`. CI does not install/start Ollama or run model compute; a real local-model smoke is separate optional validation on a machine where Ollama was intentionally installed.
 
-The package job first proves that the base built wheel does not install tiktoken, then explicitly installs the built wheel's `[tokenizers]` extra and smoke-tests a real tiktoken encoding/model mapping. It also runs the installed `paic redact` path on a synthetic fake-secret fixture and verifies that the content-free report does not echo that fake secret. Provider-native token-count API coverage remains separate future work.
+The package job first proves that the base built wheel does not install tiktoken or MCP, then explicitly installs optional extras from the **same built wheel**. It smoke-tests a real tiktoken encoding/model mapping and uses the official MCP SDK `Client(server)` in memory to verify exactly four PAIC tools, zero resources, content-free inspect/conform results, server-owned checkpoint/redaction writes, and content-safe traversal errors without starting a network listener. The base installed-wheel smoke also runs `paic redact` on a synthetic fake-secret fixture and verifies that the content-free report does not echo that fake secret. Provider-native token-count API coverage and host-specific MCP client recipes remain separate future work.
 
 See [`docs/release-readiness-0.1.0a2.md`](docs/release-readiness-0.1.0a2.md) for the full evidence ledger and known alpha limitations.
 
@@ -252,7 +266,7 @@ This project grew from a working proof of concept built to migrate a very long C
 python -m unittest discover -s tests -v
 ```
 
-CI also builds wheel + sdist and smoke-tests the installed wheel in an isolated environment. The package smoke covers normal JSONL loading, a real `bundle -> .aicb -> inspect/verify/conform/checkpoint` cycle, pattern-limited redaction review, packaged compiler-backend/token-counter CLI surfaces, a proof that the base wheel remains tokenizer-free, and a separate explicit optional-extra tiktoken smoke.
+CI also builds wheel + sdist and smoke-tests the installed wheel in an isolated environment. The package smoke covers normal JSONL loading, a real `bundle -> .aicb -> inspect/verify/conform/checkpoint` cycle, pattern-limited redaction review, packaged compiler-backend/token-counter/MCP CLI surfaces, proof that the base wheel remains tokenizer/MCP-free, a separate explicit optional-extra tiktoken smoke, and an official MCP SDK in-memory smoke installed from the same built wheel.
 
 ## Status
 
