@@ -162,11 +162,17 @@ AICB bundle contract violation: integrity.json canonical field mismatch: last_us
 
 ## Compatibility policy for the alpha
 
-The current reader is deliberately strict:
+The current reader remains deliberately strict about the archive itself:
 
 - supported schema: exactly `0.1-alpha`;
 - unknown archive members: rejected;
 - unsupported future schema versions: rejected;
 - malformed/tampered bundles: rejected rather than repaired.
 
-A backward-compatibility policy and stable `.aicb` format remain v1.0 work.
+Starting with Issue #71, the repository also carries a **published-alpha read-compatibility baseline** for the `.aicb` contract shipped in `v0.1.0a2`.
+
+Current/future PAIC main should continue to read valid `0.1-alpha` bundles conforming to that published contract. The compatibility test packages fixed historical member bytes rather than regenerating them through the current writer, so reader/writer drift cannot hide an accidental read break. If future bundle semantics become incompatible, they should use a new `schema_version` rather than silently redefining `0.1-alpha`.
+
+This guard is intentionally narrower than a v1 stability promise. Internal Python models, provider adapters, other export formats, future writer versions, migration between future bundle schema generations, signatures/authenticity, and the final semantic-versioning/backward-compatibility policy remain open work.
+
+See [`alpha-compatibility.md`](alpha-compatibility.md) for the exact baseline and non-guarantees. The v1.0 roadmap items for stable canonical schema, stable `.aicb`, and backward-compatibility policy remain unchecked.
