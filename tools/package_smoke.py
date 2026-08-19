@@ -38,6 +38,18 @@ def main() -> int:
     if not paic.is_file():
         raise SystemExit(f"installed wheel did not provide the paic console script at {paic}")
 
+    version_run = subprocess.run(
+        [str(paic), "--version"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    expected_cli_version = f"paic {expected_version}"
+    if version_run.stdout.strip() != expected_cli_version:
+        raise SystemExit(
+            f"paic --version mismatch: got={version_run.stdout.strip()!r} expected={expected_cli_version!r}"
+        )
+
     help_run = subprocess.run(
         [str(paic), "--help"],
         check=True,
@@ -76,6 +88,7 @@ def main() -> int:
                 "ok": True,
                 "distribution_version": installed_version,
                 "package_version": portable_ai_context.__version__,
+                "cli_version": version_run.stdout.strip(),
                 "source": report["source"],
                 "message_count": report["message_count"],
             },
