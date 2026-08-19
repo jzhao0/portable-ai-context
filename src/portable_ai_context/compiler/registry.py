@@ -6,6 +6,11 @@ import re
 from typing import Any
 
 from portable_ai_context.errors import CompilerError
+from .anthropic import (
+    AnthropicBackend,
+    DEFAULT_ANTHROPIC_API_BASE,
+    DEFAULT_ANTHROPIC_MAX_TOKENS,
+)
 from .base import CompilerBackend
 from .openai_compatible import OpenAICompatibleBackend
 
@@ -79,25 +84,53 @@ def create_backend(name: str, config: BackendConfig) -> CompilerBackend:
     return backend
 
 
+def _validate_api_key_env(config: BackendConfig) -> str:
+    if not isinstance(config.api_key_env, str) or not _ENV_NAME_RE.fullmatch(config.api_key_env):
+        raise CompilerError("compiler API-key environment variable name is invalid")
+    return config.api_key_env
+
+
+def _resolve_api_key(config: BackendConfig) -> str:
+    env_name = _validate_api_key_env(config)
+    api_key = config.environment.get(env_name)
+    if not isinstance(api_key, str) or not api_key:
+        raise CompilerError(f"environment variable {env_name!r} is not set")
+    return api_key
+
+
+def _validate_timeout(config: BackendConfig) -> int:
+    if not isinstance(config.timeout, int) or isinstance(config.timeout, bool) or config.timeout <= 0:
+        raise CompilerError("compiler backend timeout must be a positive integer")
+    return config.timeout
+
+
 def _openai_compatible_factory(config: BackendConfig) -> CompilerBackend:
     api_base = config.api_base
     if not isinstance(api_base, str) or not api_base.strip():
         raise CompilerError("openai-compatible backend requires --api-base")
-    if not isinstance(config.timeout, int) or isinstance(config.timeout, bool) or config.timeout <= 0:
-        raise CompilerError("compiler backend timeout must be a positive integer")
-    if not isinstance(config.api_key_env, str) or not _ENV_NAME_RE.fullmatch(config.api_key_env):
-        raise CompilerError("compiler API-key environment variable name is invalid")
-
-    api_key = config.environment.get(config.api_key_env)
-    if not isinstance(api_key, str) or not api_key:
-        raise CompilerError(
-            f"environment variable {config.api_key_env!r} is not set"
-        )
     return OpenAICompatibleBackend(
         api_base=api_base,
-        api_key=api_key,
-        timeout=config.timeout,
+        api_key=_resolve_api_key(config),
+        timeout=_validate_timeout(config),
     )
 
 
+def _anthropic_factory(config: BackendConfig) -> CompilerBackend:
+    api_base = config.api_base if config.api_base is not None else DEFAULT_ANTHROPIC_API_BASE
+    if not isinstance(api_base, str) or not api_base.strip():
+        raise CompilerError("anthropic backend API base is invalid")
+
+    max_tokens = config.options.get("anthropic_max_tokens", DEFAULT_ANTHROPIC_MAX_TOKENS)
+    if not isinstance(max_tokens, int) or isinstance(max_tokens, bool) or max_tokens <= 0:
+        raise CompilerError("anthropic max_tokens must be a positive integer")
+
+    return AnthropicBackend(
+        api_base=api_base,
+        api_key=_resolve_api_key(config),
+        max_tokens=max_tokens,
+        timeout=_validate_timeout(config),
+    )
+
+
+register_backend("anthropic", _anthropic_factory)
 register_backend("openai-compatible", _openai_compatible_factory)
