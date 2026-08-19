@@ -98,7 +98,7 @@ def cmd_smoke(args) -> int:
         "source_kind": conv.source.kind,
         "capture_method": conv.source.metadata.get("capture_method"),
         "message_count": report.message_count,
-        "snapshot_updated_at": report.snapshot.updated_at if hasattr(report, "snapshot") else report.snapshot_updated_at,
+        "snapshot_updated_at": report.snapshot_updated_at,
         "raw_node_count": report.raw_node_count,
         "conversation_digest": report.conversation_digest,
         "last_user_hash": report.last_user_hash,
