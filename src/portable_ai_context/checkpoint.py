@@ -52,6 +52,7 @@ class _PreparedMessage:
     text: str
     source_hash: str
     state_marker_hits: int
+    redaction_counts: dict[str, int]
 
 
 @dataclass(slots=True)
@@ -102,24 +103,20 @@ def _redaction_count_template() -> dict[str, int]:
     return {"private_key_material": 0, **{name: 0 for name in BODY_PATTERNS}}
 
 
-def _redact_text(text: str, totals: dict[str, int]) -> str:
-    original = text
-    private_key_matches = list(_PRIVATE_KEY_MATERIAL_RE.finditer(original))
-    totals["private_key_material"] += len(private_key_matches)
+def _redact_text(text: str) -> tuple[str, dict[str, int]]:
+    counts = _redaction_count_template()
+    redacted, count = _PRIVATE_KEY_MATERIAL_RE.subn("[REDACTED:private_key_material]", text)
+    counts["private_key_material"] = count
     for name, pattern in BODY_PATTERNS.items():
-        totals[name] += len(pattern.findall(original))
-
-    redacted = _PRIVATE_KEY_MATERIAL_RE.sub("[REDACTED:private_key_material]", original)
-    for name, pattern in BODY_PATTERNS.items():
-        redacted = pattern.sub(f"[REDACTED:{name}]", redacted)
-    return normalize_text(redacted)
+        redacted, count = pattern.subn(f"[REDACTED:{name}]", redacted)
+        counts[name] = count
+    return normalize_text(redacted), counts
 
 
-def _prepare_messages(conversation: Conversation) -> tuple[list[_PreparedMessage], dict[str, int]]:
-    totals = _redaction_count_template()
+def _prepare_messages(conversation: Conversation) -> list[_PreparedMessage]:
     prepared: list[_PreparedMessage] = []
     for message in conversation.messages:
-        safe_text = _redact_text(message.text, totals)
+        safe_text, redaction_counts = _redact_text(message.text)
         prepared.append(
             _PreparedMessage(
                 index=message.index,
@@ -127,9 +124,10 @@ def _prepare_messages(conversation: Conversation) -> tuple[list[_PreparedMessage
                 text=safe_text,
                 source_hash=message_hash(message.role, message.text),
                 state_marker_hits=_state_marker_hits(safe_text),
+                redaction_counts=redaction_counts,
             )
         )
-    return prepared, totals
+    return prepared
 
 
 def _first_index(messages: list[_PreparedMessage], role: str) -> int | None:
@@ -174,12 +172,7 @@ def _render_prefix(
     source_kind: str,
     source_message_count: int,
     source_digest: str,
-    redaction_counts: dict[str, int],
 ) -> str:
-    nonzero_redactions = {name: count for name, count in redaction_counts.items() if count}
-    redaction_json = "none" if not nonzero_redactions else ", ".join(
-        f"{name}={nonzero_redactions[name]}" for name in sorted(nonzero_redactions)
-    )
     return (
         "# PAIC Deterministic Extractive Checkpoint\n\n"
         "> This artifact is deterministic extractive evidence, not an AI summary. "
@@ -189,7 +182,7 @@ def _render_prefix(
         f"- source_kind: `{source_kind}`\n"
         f"- source_message_count: `{source_message_count}`\n"
         f"- source_conversation_digest: `{source_digest}`\n"
-        f"- supported_secret_redactions: `{redaction_json}`\n\n"
+        "- derived_secret_redaction: `supported patterns applied before selected excerpts are rendered`\n\n"
         "## Selection policy\n\n"
         "Priority is deterministic: latest user/assistant evidence, first-user goal anchor, "
         "recent tail, older explicit state-marker messages, then recent fill if budget remains. "
@@ -269,6 +262,14 @@ def _phase_token_limit(total_available: int, fraction: float, floor: int = 64) -
     return max(floor, int(total_available * fraction))
 
 
+def _selected_redaction_counts(selected: dict[int, _SelectedMessage]) -> dict[str, int]:
+    totals = _redaction_count_template()
+    for item in selected.values():
+        for name, count in item.prepared.redaction_counts.items():
+            totals[name] += count
+    return totals
+
+
 def build_extractive_checkpoint(
     conversation: Conversation,
     *,
@@ -297,14 +298,13 @@ def build_extractive_checkpoint(
 
     counter = token_counter or CharacterTokenCounter(chars_per_token=chars_per_token)
     integrity = inspect_integrity(conversation)
-    prepared, redaction_counts = _prepare_messages(conversation)
+    prepared = _prepare_messages(conversation)
     source_kind = conformance.source_kind
 
     prefix = _render_prefix(
         source_kind=source_kind,
         source_message_count=len(prepared),
         source_digest=integrity.conversation_digest,
-        redaction_counts=redaction_counts,
     )
     suffix = _render_suffix()
     empty_tokens = counter.count(prefix + suffix)
@@ -432,6 +432,7 @@ def build_extractive_checkpoint(
     compression_ratio = (output_tokens / source_tokens) if source_tokens else None
     selected_indices = sorted(selected)
     truncated_count = sum(1 for item in selected.values() if item.truncated)
+    redaction_counts = _selected_redaction_counts(selected)
 
     report = ExtractiveCheckpointReport(
         policy=POLICY_VERSION,
