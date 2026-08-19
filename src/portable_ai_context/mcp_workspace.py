@@ -13,7 +13,7 @@ from .errors import PortableAIContextError
 MCP_ARTIFACT_DIRNAME = ".paic-mcp"
 MCP_MAX_SOURCE_BYTES = 64 * 1024 * 1024
 MCP_ALLOWED_SOURCE_SUFFIXES = frozenset(
-    {".aicb", ".jsonl", ".ndjson", ".json", ".txt", ".html", ".htm"}
+    {".aicb", ".jsonl", ".json", ".txt", ".html"}
 )
 _MAX_RELATIVE_PATH_CHARS = 4096
 _SAFE_ARTIFACT_CATEGORIES = frozenset({"checkpoints", "redactions"})
@@ -21,6 +21,17 @@ _SAFE_ARTIFACT_CATEGORIES = frozenset({"checkpoints", "redactions"})
 
 class MCPWorkspaceError(PortableAIContextError):
     """Content-safe workspace policy failure for MCP operations."""
+
+
+def _remove_empty_directory(path: Path | None) -> None:
+    if path is None:
+        return
+    try:
+        if path.is_symlink():
+            return
+        path.rmdir()
+    except OSError:
+        pass
 
 
 @dataclass(slots=True, frozen=True)
@@ -39,7 +50,7 @@ class MCPWorkspace:
             raise ValueError("max_source_bytes must be a positive integer")
         try:
             resolved = Path(root).expanduser().resolve(strict=True)
-        except (OSError, RuntimeError) as exc:
+        except (OSError, RuntimeError, TypeError) as exc:
             raise MCPWorkspaceError("MCP workspace root is unavailable") from exc
         if not resolved.is_dir():
             raise MCPWorkspaceError("MCP workspace root is unavailable")
@@ -95,17 +106,23 @@ class MCPWorkspace:
 
     def _artifact_root(self) -> Path:
         path = self.root / MCP_ARTIFACT_DIRNAME
+        created_here = False
         try:
             if path.exists() or path.is_symlink():
                 if path.is_symlink() or not path.is_dir():
                     raise MCPWorkspaceError("MCP artifact area is unavailable")
             else:
                 path.mkdir(mode=0o700)
+                created_here = True
             resolved = path.resolve(strict=True)
             resolved.relative_to(self.root)
         except MCPWorkspaceError:
+            if created_here:
+                _remove_empty_directory(path)
             raise
         except (OSError, RuntimeError, ValueError) as exc:
+            if created_here:
+                _remove_empty_directory(path)
             raise MCPWorkspaceError("MCP artifact area is unavailable") from exc
         return resolved
 
@@ -115,20 +132,29 @@ class MCPWorkspace:
 
         artifact_root = self._artifact_root()
         category_dir = artifact_root / category
+        category_created_here = False
+        created: Path | None = None
         try:
             if category_dir.exists() or category_dir.is_symlink():
                 if category_dir.is_symlink() or not category_dir.is_dir():
                     raise MCPWorkspaceError("MCP artifact area is unavailable")
             else:
                 category_dir.mkdir(mode=0o700)
+                category_created_here = True
             category_resolved = category_dir.resolve(strict=True)
             category_resolved.relative_to(self.root)
             created = Path(tempfile.mkdtemp(prefix=f"{category[:-1]}-", dir=category_resolved))
             created_resolved = created.resolve(strict=True)
             created_resolved.relative_to(self.root)
         except MCPWorkspaceError:
+            _remove_empty_directory(created)
+            if category_created_here:
+                _remove_empty_directory(category_dir)
             raise
         except (OSError, RuntimeError, ValueError) as exc:
+            _remove_empty_directory(created)
+            if category_created_here:
+                _remove_empty_directory(category_dir)
             raise MCPWorkspaceError("MCP artifact area is unavailable") from exc
         return created_resolved
 
@@ -136,6 +162,6 @@ class MCPWorkspace:
         try:
             resolved = Path(path).resolve(strict=True)
             relative = resolved.relative_to(self.root)
-        except (OSError, RuntimeError, ValueError) as exc:
+        except (OSError, RuntimeError, TypeError, ValueError) as exc:
             raise MCPWorkspaceError("MCP artifact path is unavailable") from exc
         return relative.as_posix()
