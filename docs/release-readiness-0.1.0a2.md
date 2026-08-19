@@ -1,28 +1,66 @@
 # 0.1.0a2 release-readiness ledger
 
-This document records what Portable AI Context has actually verified before the `0.1.0a2` alpha publication step. It deliberately distinguishes deterministic/synthetic test coverage from real live capture evidence.
+This document records what Portable AI Context has actually verified before the `0.1.0a2` alpha publication step. It deliberately distinguishes deterministic/synthetic test coverage from real live capture/provider evidence.
 
 **Publication status:** release candidate only. `0.1.0a2` is not considered published until the tag/release/PyPI/checksum workflow in Issue #18 is completed and independently smoke-tested.
+
+Current version alignment on `main` remains:
+
+```text
+pyproject.toml project.version = 0.1.0a2
+portable_ai_context.__version__ = 0.1.0a2
+```
+
+The installed-wheel package smoke also verifies that `paic --version` matches the distribution/package version.
 
 ## Evidence classes
 
 - **Real live smoke:** exercised against a real browser/provider page or a built distribution in an actual runtime.
 - **Cross-platform CI:** deterministic repository tests on GitHub-hosted Ubuntu, Windows, and macOS.
-- **Synthetic conformance:** parser/compiler behavior tested with deliberately artificial fixtures or fake backends/tokenizers.
-- **Compatibility-only:** implemented from a documented/observed shape but not yet validated against a deliberately non-sensitive real export.
+- **Synthetic / mocked contract coverage:** parser/compiler behavior tested with deliberately artificial fixtures, fake backends/tokenizers, or mocked provider HTTP.
+- **Compatibility-only:** implemented from a documented/observed source shape but not yet validated against a deliberately non-sensitive real provider export.
+
+These labels are not interchangeable. Mocked provider HTTP proves PAIC request/response handling, not that a current paid provider account accepted a real request.
 
 ## Capability ledger
 
 | Capability | Evidence | Current status / boundary |
 | --- | --- | --- |
-| Canonical conversation model, clean HTML/TXT/JSONL, integrity/privacy reports | Cross-platform CI + deterministic round-trip tests | Implemented. Alpha schema remains unstable. |
-| ChatGPT shared-URL capture | **Real live smoke** on macOS and Windows against the same 425-message / 1773-raw-node snapshot; both used `direct_http` and produced identical digest/tail hashes. Separate GitHub-hosted Ubuntu live smoke used a deliberately public two-message share and also used `direct_http`. | Real macOS/Windows/Linux capture verified. Chromium-family browser fallback logic/discovery is CI-tested, but a live case that actually required `browser_fallback` has not been recorded. |
+| Canonical conversation model, clean HTML/TXT/JSONL, integrity/privacy reports | Cross-platform CI + deterministic round-trip tests | Implemented. Canonical schema remains alpha/unstable. |
+| `.aicb` `0.1-alpha` writer + strict first-class reader/verifier | Cross-platform CI + installed-wheel `bundle -> .aicb -> inspect/verify/conform/checkpoint` smoke | Implemented. Reader validates archive/member limits, canonical JSONL, manifest/integrity/privacy consistency and does not extract members to arbitrary paths. SHA256/digests provide internal consistency/tamper visibility, **not author authenticity or a digital signature**. |
+| Deterministic no-AI checkpoint mode | Cross-platform CI + deterministic reproducibility/budget tests + installed-wheel checkpoint smoke | Implemented as an extractive/reproducible fallback. It is not a semantic truth-resolution engine and its derived redaction is limited to PAIC's currently recognized patterns. |
+| ChatGPT shared-URL capture | **Real live smoke** on macOS and Windows against the same 425-message / 1773-raw-node snapshot; both used `direct_http` and produced identical digest/tail hashes. Separate GitHub-hosted Ubuntu live smoke used a deliberately public two-message share and also used `direct_http`. | Real macOS/Windows/Linux direct capture verified. Chromium-family browser fallback logic/discovery is CI-tested, but no recorded live case has required `browser_fallback`. |
 | ChatGPT saved/share HTML parsing | Deterministic fixtures/round-trip tests; project-origin PoC exercised real saved content but no private raw fixture is committed | Implemented; public repository intentionally contains no private source archive. |
-| Claude local conversation JSON adapter | **Synthetic conformance** + cross-platform CI | Supported alpha subset. Deliberately non-sensitive real export validation is still open in Issue #17. No authenticated scraping/page adapter. |
-| Gemini Apps My Activity JSON adapter | **Synthetic conformance** + cross-platform CI | Supported flat activity-stream subset. Deliberately non-sensitive real Takeout validation is still open in Issue #17. Original chat-thread reconstruction is not claimed. |
-| Token-aware migration budgets and Lite/Standard/Full profiles | Deterministic fake exact-tokenizer/backend tests + cross-platform CI | Compiler accepts injectable exact counters. Dependency-free CLI uses an explicit character/token estimate unless the caller supplies an exact tokenizer. |
+| Claude local conversation JSON adapter | **Synthetic conformance** + cross-platform CI | Supported alpha subset. Deliberately non-sensitive real export validation is still open in Issue #17 / volunteer Issue #22. No authenticated scraping/page adapter. |
+| Gemini Apps My Activity JSON adapter | **Synthetic conformance** + cross-platform CI | Supported flat activity-stream subset. Deliberately non-sensitive real Takeout validation is still open in Issue #17 / volunteer Issue #24. Original chat-thread reconstruction is not claimed. |
+| Shared adapter conformance gate | Cross-platform CI + installed-wheel `paic conform` smoke | Implemented. Verifies canonical structure, integrity consistency, and clean HTML/TXT/JSONL round-trip behavior without printing conversation text; does not replace real provider-source validation. |
+| Token-aware migration budgets and Lite/Standard/Full profiles | Deterministic fake exact-tokenizer/backend tests + cross-platform CI | Compiler accepts injectable exact counters. Dependency-free CLI still uses an explicit character/token estimate unless an exact tokenizer is supplied through the Python API. Exact target-model tokenization is not bundled. |
+| Compiler backend registry / construction seam | Cross-platform CI + installed-wheel `paic compile --help` surface | Implemented. Built-ins currently include `openai-compatible`, `anthropic`, `gemini`, and `ollama`; `compile_migration()` remains provider-agnostic. |
+| OpenAI-compatible compiler transport | Deterministic/mocked transport tests + cross-platform CI | Implemented. This ledger does not claim live-provider compiler evidence. |
+| Anthropic Messages compiler transport | **Mocked provider HTTP** + cross-platform CI (PR #34, final CI #76) + installed-wheel CLI surface | Implemented using the documented non-streaming Messages contract. No live paid Anthropic call is claimed. |
+| Gemini `generateContent` compiler transport | **Mocked provider HTTP** + cross-platform CI (PR #36, final CI #81) + installed-wheel CLI surface | Implemented using the stateless REST completion contract. No live paid Gemini call is claimed. |
+| Native Ollama `/api/chat` compiler transport | **Mocked provider HTTP** + cross-platform CI (PR #38, final CI #90) + installed-wheel CLI surface | Implemented. Defaults to keyless `http://localhost:11434`, while explicit custom `--api-base` may access a remote host. CI does not install/start Ollama, pull a model, or run model compute; no real local-model smoke is claimed. |
 | Chromium browser capture extension | **Real live smoke** on Windows Edge using a deliberately public/non-sensitive two-message conversation; preview count/tail matched downloaded JSONL; `paic inspect`/`verify` reproduced the same canonical messages. | Edge real smoke verified. Chrome and Brave are first-target Chromium browsers but have not been separately live-smoke-tested. Firefox is feasibility-only. |
-| Wheel/sdist packaging | **Real CI distribution smoke**: build wheel + sdist, install only the wheel into an isolated venv, verify distribution/package version, console script, `paic --help`, and `paic inspect`. | CI #25 passed with the existing 9 test jobs plus the package job. Publication is still separate. |
+| Wheel/sdist packaging | **Real CI distribution smoke**: build wheel + sdist, install only the wheel into an isolated venv, verify distribution/package/CLI version, source inspect/conform, `.aicb` roundtrip, deterministic checkpoint, and packaged compiler-backend CLI surfaces | Latest full evidence is PR #38 CI #90: package job plus Ubuntu/Windows/macOS × Python 3.10/3.12/3.13 all succeeded (10/10 jobs). Publication is still separate. |
+
+## Recent implementation evidence anchors
+
+The release candidate has continued to evolve after the older package baseline. The current ledger includes these merged implementation slices:
+
+- Issue #27 / PR #28 — deterministic no-AI extractive checkpoint mode.
+- Issue #29 / PR #30 — `.aicb` first-class strict reader/verifier and installed-wheel roundtrip.
+- Issue #31 / PR #32 — pluggable compiler backend registry / CLI construction boundary.
+- Issue #33 / PR #34 — Anthropic Messages backend; final CI #76 passed 10/10 jobs.
+- Issue #35 / PR #36 — Gemini `generateContent` backend; final CI #81 passed 10/10 jobs.
+- Issue #37 / PR #38 — native Ollama backend and URL/key-isolation hardening; final CI #90 passed 10/10 jobs.
+
+The latest merged `main` anchor after the Ollama slice is:
+
+```text
+b46c73b26305289371189e850d9091021001e56d
+```
+
+This commit identifier is an implementation anchor, not a release tag.
 
 ## Content-free real-smoke evidence
 
@@ -54,20 +92,28 @@ The deliberately public/non-sensitive two-message smoke artifact produced:
 
 Before calling `0.1.0a2` published:
 
-1. package/release CI must remain green (#15 completed);
-2. repository version, package `__version__`, and `paic --version` must agree;
-3. release notes must preserve the evidence boundaries above, especially Claude/Gemini real-export status;
+1. package/release CI must remain green;
+2. repository version, package `__version__`, and `paic --version` must agree at `0.1.0a2`;
+3. release notes must preserve the evidence boundaries above, especially Claude/Gemini real-export status and mocked-vs-live compiler transport status;
 4. publication must use a tagged commit and produce matching wheel/sdist checksums (#18);
-5. a fresh install of the published artifact must pass `paic --version` and a local inspect smoke.
+5. a fresh install of the **published** artifact must pass `paic --version` and a local inspect smoke;
+6. no release note may describe `.aicb` digests as signing/authenticity evidence;
+7. no mocked/synthetic provider result may be relabeled as a live provider validation.
 
 ## Known alpha limitations
 
 - Canonical and `.aicb` schemas are not stable contracts yet.
-- Claude and Gemini real-export validation is pending Issue #17.
+- `.aicb` integrity/digests do not authenticate the bundle author and are not a signature system.
+- Claude and Gemini real-export validation is pending Issue #17 (with volunteer Issues #22 and #24).
 - ChatGPT browser fallback has deterministic coverage but no recorded live fallback-required smoke.
 - Chromium extension DOM selectors are experimental and page markup can drift.
+- Chrome and Brave have not been separately live-smoke-tested for the extension; Firefox remains unvalidated.
 - The extension does not redact secrets deliberately typed into conversation text.
+- Deterministic checkpoint redaction is pattern-limited and should not be treated as a general confidentiality scrubber.
 - Exact target-model tokenization is not bundled; exact counters are injectable through the Python API.
-- Migration compilation still depends on an OpenAI-compatible backend when AI-assisted compilation is requested.
+- Anthropic, Gemini, and Ollama compiler transports have deterministic/mocked contract coverage, not live provider/model execution evidence in this ledger.
+- The Ollama backend is local only by default; a caller-selected remote `--api-base` can cause network access.
+- No real Ollama daemon/model smoke is recorded here.
+- `0.1.0a2` remains unpublished until Issue #18 is completed.
 
-The release ledger should be updated when any of these evidence classes change; a synthetic test must never be silently relabeled as real provider validation.
+The release ledger should be updated whenever an evidence class changes. A synthetic or mocked test must never be silently relabeled as real provider validation.
