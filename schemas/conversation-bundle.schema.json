@@ -5,22 +5,50 @@
   "type": "object",
   "required": ["schema_version", "created_at", "conversation", "artifacts"],
   "properties": {
-    "schema_version": {"type": "string", "const": "0.1-alpha"},
-    "created_at": {"type": "string"},
+    "schema_version": {
+      "type": "string",
+      "const": "0.1-alpha"
+    },
+    "created_at": {
+      "type": "string",
+      "minLength": 1
+    },
     "conversation": {
       "type": "object",
-      "required": ["title", "message_count", "digest"],
+      "required": ["title", "message_count", "digest", "source_kind"],
       "properties": {
-        "title": {"type": "string"},
-        "message_count": {"type": "integer", "minimum": 0},
-        "digest": {"type": "string"},
-        "source_kind": {"type": "string"}
+        "title": {
+          "type": "string"
+        },
+        "message_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "source_kind": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$"
+        }
       },
       "additionalProperties": true
     },
     "artifacts": {
       "type": "array",
-      "items": {"type": "string"}
+      "minItems": 4,
+      "maxItems": 4,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": [
+          "manifest.json",
+          "conversation.jsonl",
+          "integrity.json",
+          "privacy.json"
+        ]
+      }
     }
   },
   "additionalProperties": true
