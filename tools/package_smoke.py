@@ -78,6 +78,10 @@ def main() -> int:
         raise SystemExit("installed-wheel compile help did not expose --backend")
     if "openai-compatible" not in compile_help_run.stdout:
         raise SystemExit("installed-wheel compile help did not expose the default backend")
+    if "anthropic" not in compile_help_run.stdout:
+        raise SystemExit("installed-wheel compile help did not expose the Anthropic backend surface")
+    if "--anthropic-max-tokens" not in compile_help_run.stdout:
+        raise SystemExit("installed-wheel compile help did not expose Anthropic max_tokens configuration")
 
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
@@ -164,6 +168,7 @@ def main() -> int:
                 "package_version": portable_ai_context.__version__,
                 "cli_version": version_run.stdout.strip(),
                 "compiler_backend_selector": True,
+                "anthropic_backend_surface": True,
                 "source": inspect_report["source"],
                 "message_count": inspect_report["message_count"],
                 "conformance_ok": conform_report["ok"],
