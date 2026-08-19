@@ -40,6 +40,7 @@ The design goals are:
 - `.aicb` portable bundle
 - integrity report
 - privacy report
+- content-free adapter conformance report
 - optional migration prompt via OpenAI-compatible API
 - compile budget report with token estimates / exact injected counts when configured
 
@@ -78,6 +79,14 @@ Inspect a conversation:
 paic inspect conversation.clean.html
 ```
 
+Run the shared content-free adapter/canonical round-trip contract:
+
+```bash
+paic conform conversation.clean.html
+```
+
+`paic conform` reports source kind, message count, integrity digest, named structural checks, and generic violation codes without printing the conversation title, message/tail text, or source path. See [`docs/adapter-conformance.md`](docs/adapter-conformance.md).
+
 Extract normalized artifacts:
 
 ```bash
@@ -112,11 +121,13 @@ Named final-prompt budgets are `lite` (4,000), `standard` (16,000), and `full` (
 
 For pages where direct capture is unreliable, the experimental Chromium browser extension uses only `activeTab` + `scripting`, previews message count and tail text before download, and exports canonical JSONL locally. See [`extension/README.md`](extension/README.md) and the [`browser-extension threat model`](docs/browser-extension-threat-model.md).
 
-`paic` never requires API access for extraction, inspection, verification, or bundle creation.
+`paic` never requires API access for extraction, inspection, conformance checking, verification, or bundle creation.
 
 ## Verification status
 
 The project distinguishes real live validation from synthetic/conformance coverage. ChatGPT shared-URL capture has real macOS, Windows, and Linux smoke evidence, and the browser extension has a real Windows Edge smoke. Claude and Gemini adapters currently have synthetic fixtures plus cross-platform CI; deliberately non-sensitive real-export validation remains tracked in Issue #17.
+
+The shared adapter conformance contract adds one common post-canonicalization gate for current and future adapters. It verifies canonical roles/indices/text, integrity consistency, and clean HTML / compact TXT / JSONL digest-preserving round trips, but it does **not** replace real provider-source validation.
 
 See [`docs/release-readiness-0.1.0a2.md`](docs/release-readiness-0.1.0a2.md) for the full evidence ledger and known alpha limitations.
 
@@ -151,7 +162,7 @@ This project grew from a working proof of concept built to migrate a very long C
 python -m unittest discover -s tests -v
 ```
 
-CI also builds wheel + sdist and smoke-tests the installed wheel in an isolated environment before release work proceeds.
+CI also builds wheel + sdist and smoke-tests the installed wheel, including the installed `paic conform` command, in an isolated environment before release work proceeds.
 
 ## Status
 

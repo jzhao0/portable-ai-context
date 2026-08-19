@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 import zipfile
 
+from .compact_format import FORMAT_HEADER as COMPACT_FORMAT_HEADER, escape_message_text
 from .integrity import inspect as inspect_integrity
 from .models import Conversation
 from .privacy import inspect_conversation
@@ -48,13 +49,15 @@ def clean_html(conversation: Conversation) -> str:
 
 def compact_txt(conversation: Conversation) -> str:
     lines = [
+        COMPACT_FORMAT_HEADER,
         f"TITLE: {conversation.title or '(untitled)'}",
         f"MESSAGES: {len(conversation.messages)}",
-        "POLICY: canonical user/assistant final text.",
+        "POLICY: canonical user/assistant final text; compact-v1 marker escaping.",
         "",
     ]
     for message in conversation.messages:
-        lines.extend([f"<<<{message.role.upper()}>>>", normalize_text(message.text), ""])
+        body = escape_message_text(normalize_text(message.text))
+        lines.extend([f"<<<{message.role.upper()}>>>", body, ""])
     return "\n".join(lines)
 
 
