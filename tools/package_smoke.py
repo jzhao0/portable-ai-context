@@ -86,6 +86,12 @@ def main() -> int:
         raise SystemExit("installed-wheel compile help did not expose the Gemini backend surface")
     if "--gemini-max-output-tokens" not in compile_help_run.stdout:
         raise SystemExit("installed-wheel compile help did not expose Gemini maxOutputTokens configuration")
+    if "ollama" not in compile_help_run.stdout:
+        raise SystemExit("installed-wheel compile help did not expose the Ollama backend surface")
+    if "--ollama-num-predict" not in compile_help_run.stdout:
+        raise SystemExit("installed-wheel compile help did not expose Ollama num_predict configuration")
+    if "--ollama-api-key-env" not in compile_help_run.stdout:
+        raise SystemExit("installed-wheel compile help did not expose optional Ollama API-key configuration")
 
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
@@ -174,6 +180,7 @@ def main() -> int:
                 "compiler_backend_selector": True,
                 "anthropic_backend_surface": True,
                 "gemini_backend_surface": True,
+                "ollama_backend_surface": True,
                 "source": inspect_report["source"],
                 "message_count": inspect_report["message_count"],
                 "conformance_ok": conform_report["ok"],
