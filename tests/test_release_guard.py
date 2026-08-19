@@ -9,12 +9,13 @@ from tools import release_guard
 
 class ReleaseGuardTests(unittest.TestCase):
     def test_current_repository_version_sources_agree(self):
-        self.assertEqual(release_guard._project_version(), "0.1.0a2")
-        self.assertEqual(release_guard._package_version(), "0.1.0a2")
+        project_version = release_guard._project_version()
+        self.assertEqual(release_guard._package_version(), project_version)
+        self.assertIsNotNone(release_guard.TAG_RE.fullmatch(f"v{project_version}"))
         with mock.patch.object(release_guard, "_validate_tag", return_value="tagged-main-sha"):
-            report = release_guard.validate_release(tag="v0.1.0a2", mode="dry-run")
+            report = release_guard.validate_release(tag=f"v{project_version}", mode="dry-run")
         self.assertTrue(report["ok"])
-        self.assertEqual(report["version"], "0.1.0a2")
+        self.assertEqual(report["version"], project_version)
         self.assertEqual(report["commit"], "tagged-main-sha")
 
     def test_alpha_tag_must_match_project_version(self):
