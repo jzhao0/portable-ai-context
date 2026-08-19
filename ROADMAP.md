@@ -47,7 +47,7 @@
 - [x] Message-count + last-user/assistant preview before browser download
 - [ ] Separate Chrome and Brave live smoke validation
 - [ ] Firefox runtime/package validation
-- [ ] Broader snapshot completeness UI
+- [x] Broader snapshot completeness UI (#62)
 - [x] Pattern-limited body-secret redaction review (#43)
 
 ## v0.5 — Handoff integrations

@@ -9,6 +9,14 @@ const statusNode = document.getElementById("status");
 const previewNode = document.getElementById("preview");
 const messageCountNode = document.getElementById("message-count");
 const adapterNode = document.getElementById("adapter");
+const firstRoleNode = document.getElementById("first-role");
+const lastRoleNode = document.getElementById("last-role");
+const sameRoleTransitionsNode = document.getElementById("same-role-transitions");
+const ignoredRoleNodesNode = document.getElementById("ignored-role-nodes");
+const emptyRoleNodesNode = document.getElementById("empty-role-nodes");
+const completenessStatusNode = document.getElementById("completeness-status");
+const firstUserNode = document.getElementById("first-user");
+const firstAssistantNode = document.getElementById("first-assistant");
 const lastUserNode = document.getElementById("last-user");
 const lastAssistantNode = document.getElementById("last-assistant");
 
@@ -119,6 +127,18 @@ function previewText(text, limit = 600) {
   return text.length <= limit ? text : `${text.slice(0, limit)}\n… [preview truncated]`;
 }
 
+function firstMessage(role) {
+  if (!captured) {
+    return null;
+  }
+  for (let index = 0; index < captured.messages.length; index += 1) {
+    if (captured.messages[index].role === role) {
+      return captured.messages[index];
+    }
+  }
+  return null;
+}
+
 function lastMessage(role) {
   if (!captured) {
     return null;
@@ -131,6 +151,44 @@ function lastMessage(role) {
   return null;
 }
 
+function sequenceReview(messages) {
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return {
+      firstRole: "<none>",
+      lastRole: "<none>",
+      sameRoleTransitions: 0
+    };
+  }
+
+  let sameRoleTransitions = 0;
+  for (let index = 1; index < messages.length; index += 1) {
+    if (messages[index].role === messages[index - 1].role) {
+      sameRoleTransitions += 1;
+    }
+  }
+
+  return {
+    firstRole: messages[0].role,
+    lastRole: messages[messages.length - 1].role,
+    sameRoleTransitions
+  };
+}
+
+function resetReviewFields() {
+  messageCountNode.textContent = "0";
+  adapterNode.textContent = "—";
+  firstRoleNode.textContent = "—";
+  lastRoleNode.textContent = "—";
+  sameRoleTransitionsNode.textContent = "0";
+  ignoredRoleNodesNode.textContent = "0";
+  emptyRoleNodesNode.textContent = "0";
+  completenessStatusNode.textContent = "Not proven";
+  firstUserNode.textContent = "<none>";
+  firstAssistantNode.textContent = "<none>";
+  lastUserNode.textContent = "<none>";
+  lastAssistantNode.textContent = "<none>";
+}
+
 function renderPreview() {
   if (!captured) {
     previewNode.hidden = true;
@@ -139,10 +197,22 @@ function renderPreview() {
     return;
   }
 
+  const firstUser = firstMessage("user");
+  const firstAssistant = firstMessage("assistant");
   const lastUser = lastMessage("user");
   const lastAssistant = lastMessage("assistant");
+  const review = sequenceReview(captured.messages);
+
   messageCountNode.textContent = String(captured.message_count);
   adapterNode.textContent = captured.adapter;
+  firstRoleNode.textContent = review.firstRole;
+  lastRoleNode.textContent = review.lastRole;
+  sameRoleTransitionsNode.textContent = String(review.sameRoleTransitions);
+  ignoredRoleNodesNode.textContent = String(captured.ignored_role_nodes || 0);
+  emptyRoleNodesNode.textContent = String(captured.empty_role_nodes || 0);
+  completenessStatusNode.textContent = "Not proven";
+  firstUserNode.textContent = previewText(firstUser ? firstUser.text : "");
+  firstAssistantNode.textContent = previewText(firstAssistant ? firstAssistant.text : "");
   lastUserNode.textContent = previewText(lastUser ? lastUser.text : "");
   lastAssistantNode.textContent = previewText(lastAssistant ? lastAssistant.text : "");
   previewNode.hidden = false;
@@ -175,7 +245,10 @@ async function inspectActiveTab() {
     renderPreview();
     const ignored = payload.ignored_role_nodes || 0;
     const empty = payload.empty_role_nodes || 0;
-    setStatus(`Captured ${payload.message_count} messages. Ignored role nodes: ${ignored}; empty role nodes: ${empty}. Review the tail before downloading.`);
+    const review = sequenceReview(payload.messages);
+    setStatus(
+      `Captured ${payload.message_count} messages. Review signals — same-role transitions: ${review.sameRoleTransitions}; ignored role nodes: ${ignored}; empty role nodes: ${empty}. DOM completeness is not proven; compare the beginning and tail before downloading.`
+    );
   } catch (error) {
     captured = null;
     renderPreview();
@@ -202,17 +275,17 @@ function downloadJsonl() {
   anchor.click();
   anchor.remove();
   setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
-  setStatus(`Downloaded ${captured.message_count} canonical messages as JSONL.`);
+  setStatus(`Downloaded ${captured.message_count} canonical messages as JSONL. DOM completeness was not proven by the extension.`);
 }
 
 function clearCapture() {
   captured = null;
   renderPreview();
-  lastUserNode.textContent = "<none>";
-  lastAssistantNode.textContent = "<none>";
+  resetReviewFields();
   setStatus("Capture cleared from extension memory.");
 }
 
+resetReviewFields();
 captureButton.addEventListener("click", inspectActiveTab);
 downloadButton.addEventListener("click", downloadJsonl);
 clearButton.addEventListener("click", clearCapture);
