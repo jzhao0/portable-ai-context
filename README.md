@@ -16,7 +16,7 @@ The design goals are:
 - **Privacy-aware:** runtime/session metadata is excluded by whitelist; body-secret detection warns without printing secret values.
 - **Verifiable:** counts, message hashes, conversation digest, snapshot metadata, and tail hashes make truncation visible.
 - **Local-first:** extraction, normalization, inspection, conformance checking, deterministic checkpoint generation, and bundle creation need no AI API.
-- **Compiler-agnostic:** migration compilation uses a common backend protocol with built-in OpenAI-compatible and Anthropic transports.
+- **Compiler-agnostic:** migration compilation uses a common backend protocol with built-in OpenAI-compatible, Anthropic, and Gemini transports.
 - **Cross-platform:** the core and CLI are Python 3.10+ and avoid OS-specific dependencies.
 
 ## v0.1 alpha scope
@@ -43,7 +43,7 @@ The design goals are:
 - privacy report
 - content-free adapter conformance report
 - deterministic no-AI extractive checkpoint + reproducibility report
-- optional migration prompt via OpenAI-compatible or Anthropic compiler backend
+- optional migration prompt via OpenAI-compatible, Anthropic, or Gemini compiler backend
 - compile budget report with token estimates / exact injected counts when configured
 
 ### Not yet promised
@@ -53,7 +53,7 @@ The design goals are:
 - Claude shared-page HTML adapter
 - reconstruction of original Gemini chat-thread boundaries from flat My Activity exports
 - localized Gemini activity prompt formats beyond the documented alpha subset
-- Gemini/Ollama compiler transport
+- Ollama/local compiler transport
 - bundled model-specific exact tokenizer packages (exact counters can be injected through the compiler API)
 - Firefox browser-capture support or signed browser-store distribution
 - desktop GUI
@@ -154,7 +154,21 @@ paic compile conversation.clean.html \\
   -o migration
 ```
 
-PAIC does not hardcode an Anthropic model name. See [`docs/compiler-backends.md`](docs/compiler-backends.md) and [`docs/anthropic-backend.md`](docs/anthropic-backend.md) for transport/configuration and error/privacy boundaries.
+Or use the zero-dependency Gemini `generateContent` transport:
+
+```bash
+export GEMINI_API_KEY='...'
+paic compile conversation.clean.html \\
+  --backend gemini \\
+  --api-key-env GEMINI_API_KEY \\
+  --map-model <map-model> \\
+  --final-model <final-model> \\
+  --gemini-max-output-tokens 4096 \\
+  --profile standard \\
+  -o migration
+```
+
+PAIC does not hardcode provider model names. See [`docs/compiler-backends.md`](docs/compiler-backends.md), [`docs/anthropic-backend.md`](docs/anthropic-backend.md), and [`docs/gemini-backend.md`](docs/gemini-backend.md) for transport/configuration and error/privacy boundaries.
 
 Named checkpoint/compiler budgets are `lite` (4,000), `standard` (16,000), and `full` (64,000) tokens. You can instead use `--budget <tokens>`. The dependency-free CLI uses an explicit character/token estimate; exact tokenizer counters can be injected through the Python APIs. See [`docs/token-budgets.md`](docs/token-budgets.md) and [`docs/deterministic-checkpoint.md`](docs/deterministic-checkpoint.md).
 
@@ -164,7 +178,7 @@ For pages where direct capture is unreliable, the experimental Chromium browser 
 
 ## Verification status
 
-The project distinguishes real live validation from synthetic/conformance coverage. ChatGPT shared-URL capture has real macOS, Windows, and Linux smoke evidence, and the browser extension has a real Windows Edge smoke. Claude and Gemini adapters currently have synthetic fixtures plus cross-platform CI; deliberately non-sensitive real-export validation remains tracked in Issue #17.
+The project distinguishes real live validation from synthetic/conformance coverage. ChatGPT shared-URL capture has real macOS, Windows, and Linux smoke evidence, and the browser extension has a real Windows Edge smoke. Claude and Gemini source adapters currently have synthetic fixtures plus cross-platform CI; deliberately non-sensitive real-export validation remains tracked in Issue #17.
 
 The shared adapter conformance contract adds one common post-canonicalization gate for current and future adapters. It verifies canonical roles/indices/text, integrity consistency, and clean HTML / compact TXT / JSONL digest-preserving round trips, but it does **not** replace real provider-source validation.
 
@@ -172,7 +186,7 @@ The deterministic checkpoint mode is a reproducible extractive fallback, not a s
 
 `.aicb` import recomputes canonical integrity rather than trusting the manifest/report at face value. The current strict `0.1-alpha` member contract and threat model are documented in [`docs/aicb-bundle.md`](docs/aicb-bundle.md). The schema remains unstable before 1.0.
 
-Compiler transport tests are deterministic and do not spend a live provider API key in CI. The Anthropic backend is validated against the documented Messages request/response contract using mocked HTTP responses; a paid live API smoke remains a separate explicitly authorized activity.
+Compiler transport tests are deterministic and do not spend live provider API keys in CI. Anthropic is validated against the Messages contract with mocked HTTP, and Gemini is validated against the stateless `generateContent` contract with mocked HTTP. Paid live-provider smoke remains a separate explicitly authorized activity.
 
 See [`docs/release-readiness-0.1.0a2.md`](docs/release-readiness-0.1.0a2.md) for the full evidence ledger and known alpha limitations.
 

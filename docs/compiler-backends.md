@@ -16,7 +16,7 @@ class CompilerBackend(Protocol):
     ) -> str: ...
 ```
 
-The pipeline does not need to know whether a completion came from an OpenAI-compatible endpoint, Anthropic, a future Gemini/Ollama transport, or a deterministic test backend.
+The pipeline does not need to know whether a completion came from an OpenAI-compatible endpoint, Anthropic, Gemini, a future Ollama transport, or a deterministic test backend.
 
 The alpha registry/factory layer lets the CLI choose and construct provider transports without modifying `compile_migration()`.
 
@@ -27,6 +27,7 @@ Current built-ins are:
 ```text
 openai-compatible  (default)
 anthropic
+gemini
 ```
 
 The OpenAI-compatible path remains the default for backward compatibility:
@@ -62,7 +63,19 @@ paic compile conversation.clean.html \
   -o migration
 ```
 
-See [`anthropic-backend.md`](anthropic-backend.md) for the Messages API mapping and stop/error contract.
+Gemini selection:
+
+```bash
+paic compile conversation.clean.html \
+  --backend gemini \
+  --api-key-env GEMINI_API_KEY \
+  --map-model <map-model> \
+  --final-model <final-model> \
+  --gemini-max-output-tokens 4096 \
+  -o migration
+```
+
+See [`anthropic-backend.md`](anthropic-backend.md) and [`gemini-backend.md`](gemini-backend.md) for provider-specific request, completion, and error contracts.
 
 `--api-base`, `--api-key-env`, and `--timeout` remain shared compiler-construction inputs. Provider-specific validation belongs to the selected backend factory rather than the compiler pipeline.
 
@@ -84,6 +97,7 @@ The registry uses safe lowercase identifiers such as:
 ```text
 openai-compatible
 anthropic
+gemini
 future-provider
 local_model
 ```
@@ -108,7 +122,7 @@ Built-in factories resolve API keys from a configured environment-variable **nam
 
 ## Adding another built-in provider
 
-A future Gemini/Ollama implementation should follow the same separation already used by Anthropic:
+A future Ollama/local implementation should follow the same separation already used by Anthropic and Gemini:
 
 1. implement a backend object with `complete(model, system, user, stage)`;
 2. implement a small factory that validates/resolves its construction inputs;
@@ -141,6 +155,8 @@ Built-in remote transports therefore do **not** include these values in `Compile
 - raw transport error details;
 - provider URLs.
 
+Provider-specific untrusted values that become transport state, such as Gemini model URL input or finish/block details, are also omitted from normal errors when invalid or filtered.
+
 The original exception is preserved through Python exception chaining where applicable, but the normal PAIC CLI prints only the safe `CompilerError` message.
 
 Backend construction follows the same rule. Unexpected factory exceptions are wrapped as:
@@ -165,7 +181,7 @@ Current non-goals:
 
 - no Python package entry-point discovery;
 - no third-party automatic plugin loading;
-- no Gemini/Ollama transport yet;
+- no Ollama/local transport yet;
 - no change to map/reduce/final/budget prompt semantics.
 
 Python callers can continue bypassing the registry entirely and inject any compatible backend directly:
