@@ -7,11 +7,12 @@ from pathlib import Path
 import re
 import subprocess
 import sys
-import tomllib
 
 
 ROOT = Path(__file__).resolve().parents[1]
 TAG_RE = re.compile(r"^v(?P<version>[0-9]+\.[0-9]+\.[0-9]+a[0-9]+)$")
+PROJECT_SECTION_RE = re.compile(r"(?ms)^\[project\]\s*$\n(?P<body>.*?)(?=^\[|\Z)")
+PROJECT_VERSION_RE = re.compile(r'(?m)^version\s*=\s*["\'](?P<version>[^"\']+)["\']\s*$')
 
 
 class ReleaseGuardError(RuntimeError):
@@ -19,11 +20,14 @@ class ReleaseGuardError(RuntimeError):
 
 
 def _project_version() -> str:
-    project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
-    version = project.get("version")
-    if not isinstance(version, str) or not version:
+    text = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    section = PROJECT_SECTION_RE.search(text)
+    if not section:
+        raise ReleaseGuardError("[project] section is missing from pyproject.toml")
+    match = PROJECT_VERSION_RE.search(section.group("body"))
+    if not match:
         raise ReleaseGuardError("project version is missing")
-    return version
+    return match.group("version")
 
 
 def _package_version() -> str:
