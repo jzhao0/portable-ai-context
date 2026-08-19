@@ -2,7 +2,7 @@
 
 Portable AI Context separates **migration compilation policy** from **provider transport**.
 
-The core pipeline already consumes the structural `CompilerBackend` protocol:
+The core pipeline consumes the structural `CompilerBackend` protocol:
 
 ```python
 class CompilerBackend(Protocol):
@@ -16,19 +16,20 @@ class CompilerBackend(Protocol):
     ) -> str: ...
 ```
 
-The pipeline does not need to know whether a completion came from an OpenAI-compatible endpoint, Anthropic, Gemini, a local model, or a deterministic test backend.
+The pipeline does not need to know whether a completion came from an OpenAI-compatible endpoint, Anthropic, a future Gemini/Ollama transport, or a deterministic test backend.
 
-This alpha also exposes a small registry/factory layer so the CLI does not construct a concrete provider class directly.
+The alpha registry/factory layer lets the CLI choose and construct provider transports without modifying `compile_migration()`.
 
-## CLI
+## Built-in backends
 
-The current built-in backend is:
+Current built-ins are:
 
 ```text
-openai-compatible
+openai-compatible  (default)
+anthropic
 ```
 
-It remains the default, so existing commands continue to work:
+The OpenAI-compatible path remains the default for backward compatibility:
 
 ```bash
 paic compile conversation.clean.html \
@@ -38,7 +39,7 @@ paic compile conversation.clean.html \
   -o migration
 ```
 
-The backend can now be named explicitly:
+Explicit OpenAI-compatible selection:
 
 ```bash
 paic compile conversation.clean.html \
@@ -49,7 +50,21 @@ paic compile conversation.clean.html \
   -o migration
 ```
 
-`--api-base`, `--api-key-env`, and `--timeout` are retained for the existing OpenAI-compatible path. Provider-specific validation now belongs to the backend factory rather than the compiler pipeline.
+Anthropic selection:
+
+```bash
+paic compile conversation.clean.html \
+  --backend anthropic \
+  --api-key-env ANTHROPIC_API_KEY \
+  --map-model <map-model> \
+  --final-model <final-model> \
+  --anthropic-max-tokens 4096 \
+  -o migration
+```
+
+See [`anthropic-backend.md`](anthropic-backend.md) for the Messages API mapping and stop/error contract.
+
+`--api-base`, `--api-key-env`, and `--timeout` remain shared compiler-construction inputs. Provider-specific validation belongs to the selected backend factory rather than the compiler pipeline.
 
 ## Python registry API
 
@@ -68,13 +83,14 @@ The registry uses safe lowercase identifiers such as:
 
 ```text
 openai-compatible
+anthropic
 future-provider
 local_model
 ```
 
 Unsafe names are rejected. Duplicate names are rejected rather than silently replaced.
 
-A backend factory receives a `BackendConfig` and returns an object satisfying the `CompilerBackend` protocol.
+A backend factory receives a `BackendConfig` and returns an object satisfying the `CompilerBackend` protocol. Registry construction also verifies that the returned object exposes a callable `complete` method, so an invalid factory result fails at the construction seam rather than later inside the migration pipeline.
 
 Conceptually:
 
@@ -88,11 +104,11 @@ backend = create_backend("provider-name", config)
 
 `BackendConfig.environment` and `BackendConfig.options` are excluded from the dataclass representation. This reduces the chance that normal debugging accidentally expands environment secrets or future provider options.
 
-The current built-in OpenAI-compatible factory resolves the API key from the configured environment-variable **name**. The key value is not stored in `BackendConfig`.
+Built-in factories resolve API keys from a configured environment-variable **name**. Key values are not stored directly in `BackendConfig`.
 
-## Adding a future built-in provider
+## Adding another built-in provider
 
-A future Anthropic/Gemini/Ollama implementation should follow this separation:
+A future Gemini/Ollama implementation should follow the same separation already used by Anthropic:
 
 1. implement a backend object with `complete(model, system, user, stage)`;
 2. implement a small factory that validates/resolves its construction inputs;
@@ -115,7 +131,7 @@ A backend may use that metadata for logging/routing, but it must still return pl
 
 Normal compiler errors must be safe to show to the user.
 
-The built-in OpenAI-compatible backend therefore does **not** include these values in `CompilerError` text:
+Built-in remote transports therefore do **not** include these values in `CompilerError` text:
 
 - API-key values;
 - system/user prompts;
@@ -125,23 +141,18 @@ The built-in OpenAI-compatible backend therefore does **not** include these valu
 - raw transport error details;
 - provider URLs.
 
-Current error categories are intentionally concise:
-
-```text
-compiler backend HTTP status <code>
-compiler backend transport failed
-compiler backend request failed
-compiler backend returned invalid JSON
-unexpected OpenAI-compatible response shape
-compiler returned empty content
-```
-
-The original exception is preserved through Python exception chaining for local debugging, but the normal PAIC CLI prints only the safe `CompilerError` message.
+The original exception is preserved through Python exception chaining where applicable, but the normal PAIC CLI prints only the safe `CompilerError` message.
 
 Backend construction follows the same rule. Unexpected factory exceptions are wrapped as:
 
 ```text
 compiler backend construction failed
+```
+
+Factories that return an object without callable `complete` fail as:
+
+```text
+compiler backend factory returned an invalid backend
 ```
 
 Unknown backend input is not echoed. The user-facing error lists only safe registered backend identifiers.
@@ -154,7 +165,7 @@ Current non-goals:
 
 - no Python package entry-point discovery;
 - no third-party automatic plugin loading;
-- no Anthropic/Gemini/Ollama transport in this change;
+- no Gemini/Ollama transport yet;
 - no change to map/reduce/final/budget prompt semantics.
 
 Python callers can continue bypassing the registry entirely and inject any compatible backend directly:
