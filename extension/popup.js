@@ -2,6 +2,7 @@
 
 let captured = null;
 
+const extensionApi = typeof browser !== "undefined" ? browser : chrome;
 const captureButton = document.getElementById("capture");
 const downloadButton = document.getElementById("download");
 const clearButton = document.getElementById("clear");
@@ -226,13 +227,13 @@ async function inspectActiveTab() {
   renderPreview();
 
   try {
-    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    const tabs = await extensionApi.tabs.query({ active: true, currentWindow: true });
     const tab = tabs[0];
     if (!tab || typeof tab.id !== "number") {
       throw new Error("No active browser tab is available.");
     }
 
-    const results = await chrome.scripting.executeScript({
+    const results = await extensionApi.scripting.executeScript({
       target: { tabId: tab.id },
       func: captureRoleAttributeConversation
     });
