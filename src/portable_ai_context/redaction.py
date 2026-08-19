@@ -3,8 +3,10 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 import json
 from pathlib import Path
+import re
 from typing import Any
 
+from .errors import PortableAIContextError
 from .exporters import clean_html, compact_txt, jsonl
 from .integrity import inspect as inspect_integrity, message_hash
 from .models import Conversation, Message, SourceInfo
@@ -12,6 +14,8 @@ from .privacy import REDACTION_POLICY, redact_body_text, redaction_count_templat
 
 
 DERIVED_TITLE = "PAIC Pattern-Limited Redaction Review"
+_SOURCE_KIND_RE = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
+_CANONICAL_ROLES = frozenset({"user", "assistant"})
 
 
 @dataclass(slots=True)
@@ -42,8 +46,7 @@ class RedactionReviewReport:
     source_locator_preserved: bool
 
     def to_dict(self) -> dict[str, Any]:
-        value = asdict(self)
-        return value
+        return asdict(self)
 
 
 @dataclass(slots=True)
@@ -57,8 +60,26 @@ def _add_counts(total: dict[str, int], current: dict[str, int]) -> None:
         total[name] = total.get(name, 0) + count
 
 
+def _validate_canonical_structure(conversation: Conversation) -> None:
+    messages = conversation.messages
+    source_kind = conversation.source.kind
+    valid = (
+        bool(messages)
+        and isinstance(source_kind, str)
+        and bool(_SOURCE_KIND_RE.fullmatch(source_kind))
+        and [message.index for message in messages] == list(range(len(messages)))
+        and all(message.role in _CANONICAL_ROLES for message in messages)
+        and all(isinstance(message.text, str) and bool(message.text.strip()) for message in messages)
+    )
+    if not valid:
+        raise PortableAIContextError(
+            "conversation failed canonical structure required for redaction review; run 'paic conform' for content-free details"
+        )
+
+
 def build_redaction_review(conversation: Conversation) -> RedactionReviewResult:
     """Build a derived, pattern-limited redaction review without mutating input."""
+    _validate_canonical_structure(conversation)
     source_integrity = inspect_integrity(conversation)
     total_counts = redaction_count_template()
     affected: list[RedactedMessageEvidence] = []
