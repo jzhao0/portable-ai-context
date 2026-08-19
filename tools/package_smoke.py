@@ -58,6 +58,8 @@ def main() -> int:
     )
     if "Portable AI Context" not in help_run.stdout:
         raise SystemExit("paic --help did not expose the expected CLI")
+    if "conform" not in help_run.stdout:
+        raise SystemExit("paic --help did not expose the conform command")
 
     with tempfile.TemporaryDirectory() as td:
         fixture = Path(td) / "package-smoke.jsonl"
@@ -77,10 +79,24 @@ def main() -> int:
             capture_output=True,
             text=True,
         )
-        report = json.loads(inspect_run.stdout)
+        inspect_report = json.loads(inspect_run.stdout)
 
-    if report.get("source") != "jsonl" or report.get("message_count") != 2:
-        raise SystemExit(f"installed-wheel inspect smoke failed: {report!r}")
+        conform_run = subprocess.run(
+            [str(paic), "conform", str(fixture)],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if conform_run.returncode != 0:
+            raise SystemExit("installed-wheel conform smoke returned nonzero")
+        conform_report = json.loads(conform_run.stdout)
+
+    if inspect_report.get("source") != "jsonl" or inspect_report.get("message_count") != 2:
+        raise SystemExit(f"installed-wheel inspect smoke failed: {inspect_report!r}")
+    if not conform_report.get("ok") or conform_report.get("source_kind") != "jsonl":
+        raise SystemExit(f"installed-wheel conform smoke failed: {conform_report!r}")
+    if conform_report.get("message_count") != 2:
+        raise SystemExit("installed-wheel conform smoke returned wrong message count")
 
     print(
         json.dumps(
@@ -89,8 +105,9 @@ def main() -> int:
                 "distribution_version": installed_version,
                 "package_version": portable_ai_context.__version__,
                 "cli_version": version_run.stdout.strip(),
-                "source": report["source"],
-                "message_count": report["message_count"],
+                "source": inspect_report["source"],
+                "message_count": inspect_report["message_count"],
+                "conformance_ok": conform_report["ok"],
             },
             indent=2,
         )
