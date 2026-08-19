@@ -65,22 +65,31 @@ Those belong on the roadmap, not in the v0.1 contract.
 
 ## Quick start
 
+Install the published `0.1.0a2` alpha from PyPI:
+
 ```bash
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\\Scripts\\activate
-pip install -e .
+python -m pip install "portable-ai-context==0.1.0a2"
+paic --version
 ```
 
-The base install remains dependency-free. Optional local exact raw-text counting under OpenAI tiktoken encodings is available with:
+For development from a repository checkout, install the working tree instead:
 
 ```bash
-pip install -e '.[tokenizers]'
+python -m pip install -e .
+```
+
+The base install remains dependency-free. Optional local exact raw-text counting under OpenAI tiktoken encodings is available from the published package with:
+
+```bash
+python -m pip install "portable-ai-context[tokenizers]==0.1.0a2"
 ```
 
 Optional local MCP handoff support is available with:
 
 ```bash
-pip install -e '.[mcp]'
+python -m pip install "portable-ai-context[mcp]==0.1.0a2"
 ```
 
 The MCP alpha is stdio-only and requires an explicit workspace root:
@@ -272,7 +281,14 @@ CI also builds wheel + sdist and smoke-tests the installed wheel in an isolated 
 
 ## Status
 
-`0.1.0a2` is prepared as the next alpha release candidate. Package/release CI is in place, but the version is **not considered published** until the tagged publication/checksum workflow in Issue #18 is completed. APIs and schemas remain alpha and may change before 1.0.
+`0.1.0a2` was published on 2026-08-19 through the protected GitHub Actions / PyPI Trusted Publishing pipeline tracked in Issue #18. The published wheel and sdist were hash-verified against the formal tagged build, a fresh exact-version PyPI install passed the package smoke, and the matching GitHub Release was created from protected tag `v0.1.0a2`. APIs and schemas remain alpha and may change before 1.0.
+
+Published release:
+
+- PyPI: https://pypi.org/project/portable-ai-context/0.1.0a2/
+- GitHub Release: https://github.com/jzhao0/portable-ai-context/releases/tag/v0.1.0a2
+
+Claude/Gemini real provider-export validation remains explicitly separate in Issue #17 and is not claimed by this release.
 
 ## License
 
