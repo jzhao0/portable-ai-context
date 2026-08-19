@@ -65,12 +65,11 @@ def main() -> int:
         capture_output=True,
         text=True,
     )
+    for command in ("conform", "checkpoint", "redact"):
+        if command not in help_run.stdout:
+            raise SystemExit(f"paic --help did not expose the {command} command")
     if "Portable AI Context" not in help_run.stdout:
         raise SystemExit("paic --help did not expose the expected CLI")
-    if "conform" not in help_run.stdout:
-        raise SystemExit("paic --help did not expose the conform command")
-    if "checkpoint" not in help_run.stdout:
-        raise SystemExit("paic --help did not expose the checkpoint command")
 
     compile_help_run = subprocess.run(
         [str(paic), "compile", "--help"],
@@ -153,6 +152,54 @@ def main() -> int:
             raise SystemExit("installed-wheel checkpoint smoke did not create expected files")
         checkpoint_report = json.loads(checkpoint_report_path.read_text(encoding="utf-8"))
 
+        fake_secret = "sk-ABCDEFGHIJKLMNOPQRSTUVWXYZ123456"
+        redaction_fixture = root / "redaction-smoke.jsonl"
+        redaction_fixture.write_text(
+            "\n".join(
+                [
+                    json.dumps({"role": "user", "text": f"synthetic secret {fake_secret}"}),
+                    json.dumps({"role": "assistant", "text": "ordinary answer"}),
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        redaction_dir = root / "redaction-review"
+        redact_run, redact_payload = _run_json(
+            [str(paic), "redact", str(redaction_fixture), "-o", str(redaction_dir)]
+        )
+        if redact_run.returncode != 0:
+            raise SystemExit("installed-wheel redaction smoke returned nonzero")
+        redaction_report_path = redaction_dir / "redaction-report.json"
+        redacted_jsonl_path = redaction_dir / "conversation.redacted.jsonl"
+        for expected in (
+            redaction_dir / "conversation.redacted.clean.html",
+            redaction_dir / "conversation.redacted.compact.txt",
+            redacted_jsonl_path,
+            redaction_report_path,
+        ):
+            if not expected.is_file():
+                raise SystemExit(f"installed-wheel redaction smoke missed artifact: {expected.name}")
+        redaction_report_text = redaction_report_path.read_text(encoding="utf-8")
+        if fake_secret in redact_run.stdout or fake_secret in redaction_report_text:
+            raise SystemExit("installed-wheel redaction smoke leaked the synthetic secret in report/stdout")
+        redaction_report = json.loads(redaction_report_text)
+        if redaction_report.get("affected_message_count") != 1:
+            raise SystemExit("installed-wheel redaction smoke returned wrong affected message count")
+        if redaction_report.get("supported_patterns_remaining") != 0:
+            raise SystemExit("installed-wheel redaction smoke left a supported pattern")
+        if redaction_report.get("manual_review_required") is not True:
+            raise SystemExit("installed-wheel redaction smoke did not require manual review")
+        if redaction_report.get("patterns_are_exhaustive") is not False:
+            raise SystemExit("installed-wheel redaction smoke overstated pattern coverage")
+        _, redacted_inspect_report = _run_json([str(paic), "inspect", str(redacted_jsonl_path)])
+        if any(redacted_inspect_report["privacy"]["body_secret_counts"].values()):
+            raise SystemExit("installed-wheel redaction smoke still detected a supported body pattern")
+        if redact_payload.get("summary", {}).get("redacted_conversation_digest") != redaction_report.get(
+            "redacted_conversation_digest"
+        ):
+            raise SystemExit("installed-wheel redaction stdout/report digest mismatch")
+
     if inspect_report.get("source") != "jsonl" or inspect_report.get("message_count") != 2:
         raise SystemExit(f"installed-wheel inspect smoke failed: {inspect_report!r}")
     if not conform_report.get("ok") or conform_report.get("source_kind") != "jsonl":
@@ -176,6 +223,9 @@ def main() -> int:
     if checkpoint_report.get("source_kind") != "aicb" or not checkpoint_report.get("budget_met"):
         raise SystemExit("installed-wheel AICB checkpoint smoke failed report validation")
 
+    if redacted_inspect_report.get("source") != "jsonl" or redacted_inspect_report.get("message_count") != 2:
+        raise SystemExit("installed-wheel redacted JSONL inspect smoke failed")
+
     print(
         json.dumps(
             {
@@ -189,6 +239,8 @@ def main() -> int:
                 "gemini_backend_surface": True,
                 "ollama_backend_surface": True,
                 "token_counter_selector": True,
+                "redaction_review_surface": True,
+                "redaction_manual_review_required": redaction_report["manual_review_required"],
                 "source": inspect_report["source"],
                 "message_count": inspect_report["message_count"],
                 "conformance_ok": conform_report["ok"],

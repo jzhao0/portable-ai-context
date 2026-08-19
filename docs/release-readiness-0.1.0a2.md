@@ -28,7 +28,8 @@ These labels are not interchangeable. Mocked provider HTTP proves PAIC request/r
 | --- | --- | --- |
 | Canonical conversation model, clean HTML/TXT/JSONL, integrity/privacy reports | Cross-platform CI + deterministic round-trip tests | Implemented. Canonical schema remains alpha/unstable. |
 | `.aicb` `0.1-alpha` writer + strict first-class reader/verifier | Cross-platform CI + installed-wheel `bundle -> .aicb -> inspect/verify/conform/checkpoint` smoke | Implemented. Reader validates archive/member limits, canonical JSONL, manifest/integrity/privacy consistency and does not extract members to arbitrary paths. SHA256/digests provide internal consistency/tamper visibility, **not author authenticity or a digital signature**. |
-| Deterministic no-AI checkpoint mode | Cross-platform CI + deterministic reproducibility/budget tests + installed-wheel checkpoint smoke | Implemented as an extractive/reproducible fallback. It is not a semantic truth-resolution engine and its derived redaction is limited to PAIC's currently recognized patterns. |
+| Deterministic no-AI checkpoint mode | Cross-platform CI + deterministic reproducibility/budget tests + installed-wheel checkpoint smoke | Implemented as an extractive/reproducible fallback. It is not a semantic truth-resolution engine. Its derived secret redaction uses the same shared pattern-limited primitive as explicit redaction review. |
+| Pattern-limited body-secret redaction review | Deterministic synthetic secret fixtures + derived-format digest round trips + installed-wheel fake-secret smoke | Explicit `paic redact` creates derived redacted HTML/TXT/JSONL plus a content-free structural report and never mutates canonical history. Original title/source locator/message metadata are not propagated. `supported_patterns_remaining=0` does **not** mean safe to share: `manual_review_required=true` and `patterns_are_exhaustive=false` remain mandatory. This is not general DLP/PII sanitization. |
 | ChatGPT shared-URL capture | **Real live smoke** on macOS and Windows against the same 425-message / 1773-raw-node snapshot; both used `direct_http` and produced identical digest/tail hashes. Separate GitHub-hosted Ubuntu live smoke used a deliberately public two-message share and also used `direct_http`. | Real macOS/Windows/Linux direct capture verified. Chromium-family browser fallback logic/discovery is CI-tested, but no recorded live case has required `browser_fallback`. |
 | ChatGPT saved/share HTML parsing | Deterministic fixtures/round-trip tests; project-origin PoC exercised real saved content but no private raw fixture is committed | Implemented; public repository intentionally contains no private source archive. |
 | Claude local conversation JSON adapter | **Synthetic conformance** + cross-platform CI | Supported alpha subset. Deliberately non-sensitive real export validation is still open in Issue #17 / volunteer Issue #22. No authenticated scraping/page adapter. |
@@ -42,7 +43,7 @@ These labels are not interchangeable. Mocked provider HTTP proves PAIC request/r
 | Gemini `generateContent` compiler transport | **Mocked provider HTTP** + cross-platform CI (PR #36, final CI #81) + installed-wheel CLI surface | Implemented using the stateless REST completion contract. No live paid Gemini call is claimed. |
 | Native Ollama `/api/chat` compiler transport | **Mocked provider HTTP** + cross-platform CI (PR #38, final CI #90) + installed-wheel CLI surface | Implemented. Defaults to keyless `http://localhost:11434`, while explicit custom `--api-base` may access a remote host. CI does not install/start Ollama, pull a model, or run model compute; no real local-model smoke is claimed. |
 | Chromium browser capture extension | **Real live smoke** on Windows Edge using a deliberately public/non-sensitive two-message conversation; preview count/tail matched downloaded JSONL; `paic inspect`/`verify` reproduced the same canonical messages. | Edge real smoke verified. Chrome and Brave are first-target Chromium browsers but have not been separately live-smoke-tested. Firefox is feasibility-only. |
-| Wheel/sdist packaging | **Real CI distribution smoke**: build wheel + sdist, install only the wheel into an isolated venv, verify distribution/package/CLI version, source inspect/conform, `.aicb` roundtrip, deterministic checkpoint, packaged compiler/token-counter CLI surfaces, then explicitly install/smoke the tokenizer extra | The base-wheel smoke verifies tiktoken is absent before the extra is installed. Publication remains separate. |
+| Wheel/sdist packaging | **Real CI distribution smoke**: build wheel + sdist, install only the wheel into an isolated venv, verify distribution/package/CLI version, source inspect/conform, `.aicb` roundtrip, deterministic checkpoint, pattern-limited `paic redact` fake-secret review, packaged compiler/token-counter CLI surfaces, then explicitly install/smoke the tokenizer extra | The base-wheel smoke verifies tiktoken is absent before the extra is installed. Redaction smoke verifies the synthetic secret is absent from stdout/report, supported-pattern rescan is zero, and manual review remains required. Publication remains separate. |
 
 ## Recent implementation evidence anchors
 
@@ -54,15 +55,16 @@ The release candidate has continued to evolve after the older package baseline. 
 - Issue #33 / PR #34 — Anthropic Messages backend; final CI #76 passed 10/10 jobs.
 - Issue #35 / PR #36 — Gemini `generateContent` backend; final CI #81 passed 10/10 jobs.
 - Issue #37 / PR #38 — native Ollama backend and URL/key-isolation hardening; final CI #90 passed 10/10 jobs.
-- Issue #41 — optional tiktoken raw-text exact counter while preserving the zero-dependency base install.
+- Issue #41 / PR #42 — optional tiktoken raw-text exact counter while preserving the zero-dependency base install; final CI #95 passed 10/10 jobs.
+- Issue #43 — pattern-limited explicit body-secret redaction review sharing one redaction primitive with deterministic checkpoint generation. Final PR/CI evidence is intentionally not recorded until its merge gate is complete.
 
-The earlier major-code `main` anchor after the Ollama slice is:
+The latest merged `main` anchor before the Issue #43 implementation branch is:
 
 ```text
-b46c73b26305289371189e850d9091021001e56d
+e72a88d18d07387887718a1c608cecd781265ca7
 ```
 
-Later documentation/token-counter changes are tracked by their own PR/CI evidence. Commit identifiers are implementation anchors, not release tags.
+Commit identifiers are implementation anchors, not release tags.
 
 ## Content-free real-smoke evidence
 
@@ -101,7 +103,8 @@ Before calling `0.1.0a2` published:
 5. a fresh install of the **published** artifact must pass `paic --version` and a local inspect smoke;
 6. no release note may describe `.aicb` digests as signing/authenticity evidence;
 7. no mocked/synthetic provider result may be relabeled as a live provider validation;
-8. optional tokenizer support must not make tiktoken an unconditional base dependency or be described as exact whole-request billing tokenization.
+8. optional tokenizer support must not make tiktoken an unconditional base dependency or be described as exact whole-request billing tokenization;
+9. a redaction report with zero remaining **supported** patterns must never be described as proof that the artifact is generally safe to share; manual review remains required.
 
 ## Known alpha limitations
 
@@ -112,7 +115,8 @@ Before calling `0.1.0a2` published:
 - Chromium extension DOM selectors are experimental and page markup can drift.
 - Chrome and Brave have not been separately live-smoke-tested for the extension; Firefox remains unvalidated.
 - The extension does not redact secrets deliberately typed into conversation text.
-- Deterministic checkpoint redaction is pattern-limited and should not be treated as a general confidentiality scrubber.
+- Deterministic checkpoint and explicit redaction-review secret removal are **pattern-limited**, not general confidentiality/DLP/PII sanitization. Unknown credentials, PII, private URLs, proprietary prose, and unsupported secret formats may remain.
+- `paic redact` deliberately requires manual review even when its supported-pattern rescan is zero; the implemented pattern set is explicitly non-exhaustive.
 - Optional tiktoken exactness is raw-text/encoding exactness only; exact provider request/billing counts are not claimed.
 - PAIC does not maintain speculative model-to-encoding mappings. Unknown tiktoken model mappings require an explicit encoding.
 - Provider-native token-count adapters for Anthropic/Gemini/Ollama semantics remain future work; Anthropic's documented count is itself an estimate, Gemini counting is provider-side, and Ollama has no universal count-only native chat tokenizer endpoint.

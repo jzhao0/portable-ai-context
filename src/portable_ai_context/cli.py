@@ -24,6 +24,7 @@ from .errors import PortableAIContextError
 from .exporters import write_bundle, write_standard
 from .integrity import inspect as inspect_integrity
 from .privacy import inspect_conversation
+from .redaction import write_redaction_review
 
 
 def _print_json(value) -> None:
@@ -132,6 +133,17 @@ def cmd_extract(args) -> int:
     conv = load_conversation(args.source)
     paths = write_standard(conv, args.output)
     _print_json({name: str(path) for name, path in paths.items()})
+    return 0
+
+
+def cmd_redact(args) -> int:
+    conv = load_conversation(args.source)
+    paths = write_redaction_review(conv, args.output)
+    report = json.loads(paths["redaction_report"].read_text(encoding="utf-8"))
+    _print_json({
+        "artifacts": {name: str(path) for name, path in paths.items()},
+        "summary": report,
+    })
     return 0
 
 
@@ -256,6 +268,14 @@ def build_parser() -> argparse.ArgumentParser:
     extract_p.add_argument("source")
     extract_p.add_argument("-o", "--output", required=True)
     extract_p.set_defaults(func=cmd_extract)
+
+    redact_p = sub.add_parser(
+        "redact",
+        help="write pattern-limited derived redaction-review artifacts",
+    )
+    redact_p.add_argument("source")
+    redact_p.add_argument("-o", "--output", required=True)
+    redact_p.set_defaults(func=cmd_redact)
 
     bundle_p = sub.add_parser("bundle", help="write alpha .aicb bundle")
     bundle_p.add_argument("source")

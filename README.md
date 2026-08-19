@@ -13,9 +13,9 @@ Long-running AI conversations accumulate decisions, corrections, commands, exper
 The design goals are:
 
 - **Portable:** source adapters normalize different conversation formats.
-- **Privacy-aware:** runtime/session metadata is excluded by whitelist; body-secret detection warns without printing secret values.
+- **Privacy-aware:** runtime/session metadata is excluded by whitelist; body-secret detection warns without printing secret values; explicit redaction creates derived review copies rather than rewriting canonical history.
 - **Verifiable:** counts, message hashes, conversation digest, snapshot metadata, and tail hashes make truncation visible.
-- **Local-first:** extraction, normalization, inspection, conformance checking, deterministic checkpoint generation, and bundle creation need no AI API.
+- **Local-first:** extraction, normalization, inspection, conformance checking, deterministic checkpoint generation, pattern-limited redaction review, and bundle creation need no AI API.
 - **Compiler-agnostic:** migration compilation uses a common backend protocol with built-in OpenAI-compatible, Anthropic, Gemini, and native Ollama transports.
 - **Cross-platform:** the core and CLI are Python 3.10+ and avoid OS-specific dependencies.
 
@@ -43,6 +43,7 @@ The design goals are:
 - privacy report
 - content-free adapter conformance report
 - deterministic no-AI extractive checkpoint + reproducibility report
+- pattern-limited derived redaction-review HTML/TXT/JSONL + content-free report
 - optional migration prompt via OpenAI-compatible, Anthropic, Gemini, or Ollama compiler backend
 - compile budget report with dependency-free estimates or an optional exact raw-text tiktoken counter
 
@@ -54,6 +55,7 @@ The design goals are:
 - reconstruction of original Gemini chat-thread boundaries from flat My Activity exports
 - localized Gemini activity prompt formats beyond the documented alpha subset
 - universal/provider-native exact token counting across all compiler backends
+- general-purpose DLP/PII sanitization beyond the documented pattern-limited redaction rules
 - Firefox browser-capture support or signed browser-store distribution
 - desktop GUI
 - stable `.aicb` schema
@@ -108,6 +110,14 @@ Extract normalized artifacts:
 ```bash
 paic extract conversation.clean.html -o out
 ```
+
+Create an explicit pattern-limited redaction review without modifying the source/canonical conversation:
+
+```bash
+paic redact conversation.clean.html -o redaction-review
+```
+
+This writes derived redacted HTML/TXT/JSONL plus a content-free `redaction-report.json`. The report always keeps `manual_review_required=true` and `patterns_are_exhaustive=false`, even when the supported-pattern rescan is zero. A zero supported-pattern count is **not** proof that the artifact contains no other sensitive information. See [`docs/redaction-review.md`](docs/redaction-review.md) and [`docs/privacy-model.md`](docs/privacy-model.md).
 
 Create a portable bundle:
 
@@ -193,7 +203,7 @@ Named checkpoint/compiler budgets are `lite` (4,000), `standard` (16,000), and `
 
 For pages where direct capture is unreliable, the experimental Chromium browser extension uses only `activeTab` + `scripting`, previews message count and tail text before download, and exports canonical JSONL locally. See [`extension/README.md`](extension/README.md) and the [`browser-extension threat model`](docs/browser-extension-threat-model.md).
 
-`paic` never requires API access for extraction, inspection, conformance checking, deterministic checkpoint generation, verification, or bundle creation/import. Only AI-assisted `paic compile` requires a model backend. The optional tiktoken counter performs tokenizer computation locally, although tiktoken itself may populate its encoding-data cache when an encoding is initialized.
+`paic` never requires API access for extraction, inspection, conformance checking, deterministic checkpoint generation, pattern-limited redaction review, verification, or bundle creation/import. Only AI-assisted `paic compile` requires a model backend. The optional tiktoken counter performs tokenizer computation locally, although tiktoken itself may populate its encoding-data cache when an encoding is initialized.
 
 ## Verification status
 
@@ -201,13 +211,13 @@ The project distinguishes real live validation from synthetic/conformance covera
 
 The shared adapter conformance contract adds one common post-canonicalization gate for current and future adapters. It verifies canonical roles/indices/text, integrity consistency, and clean HTML / compact TXT / JSONL digest-preserving round trips, but it does **not** replace real provider-source validation.
 
-The deterministic checkpoint mode is a reproducible extractive fallback, not a semantic summary. Its derived artifact pattern-redacts the secret-like formats currently recognized by PAIC while leaving canonical history unchanged; it is not a general confidentiality scrubber and should be reviewed before sharing.
+The deterministic checkpoint and explicit `paic redact` review share one pattern-limited secret-redaction primitive. Both leave canonical history unchanged. Neither is a general confidentiality scrubber, and derived artifacts must be reviewed before sharing.
 
 `.aicb` import recomputes canonical integrity rather than trusting the manifest/report at face value. The current strict `0.1-alpha` member contract and threat model are documented in [`docs/aicb-bundle.md`](docs/aicb-bundle.md). The schema remains unstable before 1.0.
 
 Compiler transport tests are deterministic and do not spend live provider API keys in CI. Anthropic is validated against the Messages contract with mocked HTTP, Gemini against the stateless `generateContent` contract, and Ollama against native `/api/chat`. CI does not install/start Ollama or run model compute; a real local-model smoke is separate optional validation on a machine where Ollama was intentionally installed.
 
-The package job first proves that the base built wheel does not install tiktoken, then explicitly installs the built wheel's `[tokenizers]` extra and smoke-tests a real tiktoken encoding/model mapping. Provider-native token-count API coverage remains separate future work.
+The package job first proves that the base built wheel does not install tiktoken, then explicitly installs the built wheel's `[tokenizers]` extra and smoke-tests a real tiktoken encoding/model mapping. It also runs the installed `paic redact` path on a synthetic fake-secret fixture and verifies that the content-free report does not echo that fake secret. Provider-native token-count API coverage remains separate future work.
 
 See [`docs/release-readiness-0.1.0a2.md`](docs/release-readiness-0.1.0a2.md) for the full evidence ledger and known alpha limitations.
 
@@ -228,9 +238,9 @@ The initial bundle manifest schema is documented in [`schemas/conversation-bundl
 Two different classes of secrets are treated differently:
 
 1. **Page/runtime secrets** — account/session/auth/bootstrap data that is not part of the conversation. Adapters use whitelists and do not emit it.
-2. **Secrets typed into the conversation body** — these are user content. Canonical history is not silently rewritten. Privacy inspection reports supported suspicious-pattern counts; the separate deterministic checkpoint renderer additionally redacts those supported patterns only in its derived handoff artifact.
+2. **Secrets typed into the conversation body** — these are user content. Canonical history is not silently rewritten. Privacy inspection reports supported suspicious-pattern counts. Explicit `paic redact` and deterministic checkpoint generation use the same pattern-limited derived-output transform, while still requiring manual review.
 
-See [`docs/privacy-model.md`](docs/privacy-model.md) and [`docs/deterministic-checkpoint.md`](docs/deterministic-checkpoint.md).
+See [`docs/privacy-model.md`](docs/privacy-model.md), [`docs/redaction-review.md`](docs/redaction-review.md), and [`docs/deterministic-checkpoint.md`](docs/deterministic-checkpoint.md).
 
 ## Project origin
 
@@ -242,7 +252,7 @@ This project grew from a working proof of concept built to migrate a very long C
 python -m unittest discover -s tests -v
 ```
 
-CI also builds wheel + sdist and smoke-tests the installed wheel in an isolated environment. The package smoke covers normal JSONL loading, a real `bundle -> .aicb -> inspect/verify/conform/checkpoint` cycle, packaged compiler-backend/token-counter CLI surfaces, a proof that the base wheel remains tokenizer-free, and a separate explicit optional-extra tiktoken smoke.
+CI also builds wheel + sdist and smoke-tests the installed wheel in an isolated environment. The package smoke covers normal JSONL loading, a real `bundle -> .aicb -> inspect/verify/conform/checkpoint` cycle, pattern-limited redaction review, packaged compiler-backend/token-counter CLI surfaces, a proof that the base wheel remains tokenizer-free, and a separate explicit optional-extra tiktoken smoke.
 
 ## Status
 
