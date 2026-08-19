@@ -31,7 +31,7 @@ Publish mode additionally refuses a `CHANGELOG.md` release heading that is still
 
 ## Build provenance and artifact identity
 
-The workflow checks out the existing release tag with full Git history and builds from that tagged commit. It does not accept locally uploaded wheel/sdist files as release inputs.
+The workflow checks out the existing release tag with full Git history and builds from that tagged commit. It does not accept locally uploaded wheel/sdist files as release inputs. Checkout credentials are not persisted.
 
 The build job:
 
@@ -45,6 +45,31 @@ The build job:
 8. uploads the verified build products as a short-lived GitHub Actions artifact.
 
 `dry-run` stops after this stage.
+
+## GitHub Actions supply-chain pinning
+
+Every external action used by the release workflow is pinned to a **full 40-character commit SHA**, with the human-readable release version retained in a comment. The workflow policy tests fail if a mutable branch, major-version pointer, or version tag is introduced into a `uses:` line.
+
+The currently reviewed pins are:
+
+```text
+actions/checkout
+  3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+actions/setup-python
+  5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+
+actions/upload-artifact
+  043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+
+actions/download-artifact
+  3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+
+pypa/gh-action-pypi-publish
+  dc37677b2e1c63e2034f94d8a5b11f265b73ba33  # v1.14.2
+```
+
+Updating one of these dependencies requires an explicit reviewed commit that changes the SHA and version comment together.
 
 ## PyPI Trusted Publishing setup
 
@@ -87,10 +112,10 @@ The PyPI OIDC permission (`id-token: write`) exists only on the `pypi-publish` j
 
 ## Trusted publication and attestations
 
-The publish job uses the official PyPA action at the exact immutable release tag:
+The publish job uses the official PyPA action pinned to the reviewed commit for release `v1.14.2`:
 
 ```text
-pypa/gh-action-pypi-publish@v1.14.2
+pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
 ```
 
 Trusted Publishing exchanges the GitHub Actions OIDC identity for a short-lived PyPI credential; no repository secret is required.
@@ -179,7 +204,9 @@ The PyPI files have already been verified against the original `SHA256SUMS`. Kee
 
 - No PyPI API token/password is committed or stored as a repository secret for this workflow.
 - `id-token: write` is scoped only to the publishing job.
-- The publishing job does not check out or execute repository code; it only downloads the prebuilt artifact and calls the official PyPA publishing action.
+- Every external release-workflow action is pinned to a reviewed full commit SHA.
+- The publishing job does not check out or execute repository code; it only downloads the prebuilt artifact and calls the pinned official PyPA publishing action.
+- Checkout credentials are not persisted in jobs that check out the release source.
 - The tagged commit must already be in `main` history.
 - The release tag, project version, package version, built artifact names, PyPI hashes, and installed version must agree.
 - The workflow defaults to `dry-run`; publish requires an explicit mode choice and the protected `pypi` environment.
