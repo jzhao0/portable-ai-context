@@ -15,7 +15,7 @@ class CompactTxtRoundTripTests(unittest.TestCase):
             messages=[
                 Message(
                     role="user",
-                    text="before\n<<<USER>>>\n\\<<<ASSISTANT>>>\nafter",
+                    text="before\n<<<USER>>>\n<<<USER>>\n\\<<<ASSISTANT>>>\nafter",
                     index=0,
                 ),
                 Message(
@@ -29,6 +29,7 @@ class CompactTxtRoundTripTests(unittest.TestCase):
         exported = compact_txt(conversation)
         self.assertIn("FORMAT: paic-compact-v1", exported)
         self.assertIn("\\<<<USER>>>", exported)
+        self.assertIn("<<<USER>>", exported)
         self.assertIn("\\\\<<<ASSISTANT>>>", exported)
 
         loaded = compact_txt_adapter.load("roundtrip.txt", exported)
@@ -53,6 +54,12 @@ class CompactTxtRoundTripTests(unittest.TestCase):
             [("user", "legacy question"), ("assistant", "legacy answer")],
         )
         self.assertEqual(loaded.source.metadata["format"], "legacy-marker-text")
+
+    def test_legacy_tolerance_does_not_change_strict_v1_marker_rules(self):
+        legacy = """TITLE: Legacy tolerant\n\n<<<USER>>\nlegacy two-close marker\n\n<<<ASSISTANT>>\nlegacy answer\n"""
+        loaded = compact_txt_adapter.load("legacy-tolerant.txt", legacy)
+        self.assertEqual(len(loaded.messages), 2)
+        self.assertEqual(loaded.messages[0].text, "legacy two-close marker")
 
 
 if __name__ == "__main__":
