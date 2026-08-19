@@ -1,0 +1,186 @@
+# Alpha release procedure
+
+This document defines the controlled publication path for Portable AI Context alpha releases.
+
+The release workflow is `.github/workflows/release.yml`. It is manual (`workflow_dispatch`) and defaults to `dry-run`. Creating or pushing a tag by itself does **not** publish to PyPI.
+
+## Version and tag convention
+
+Alpha package versions use PEP 440-style alpha versions such as:
+
+```text
+0.1.0a2
+```
+
+The corresponding Git tag is exactly:
+
+```text
+v0.1.0a2
+```
+
+The release guard fails unless all of the following agree:
+
+- `pyproject.toml` project version;
+- `src/portable_ai_context/__init__.py` `__version__`;
+- the version encoded in the requested `vX.Y.ZaN` tag;
+- the exact wheel/sdist filenames produced by the tagged commit.
+
+The workflow also requires the tagged commit to be contained in `origin/main` history.
+
+Publish mode additionally refuses a `CHANGELOG.md` release heading that is still marked `Unreleased`.
+
+## Build provenance and artifact identity
+
+The workflow checks out the existing release tag with full Git history and builds from that tagged commit. It does not accept locally uploaded wheel/sdist files as release inputs.
+
+The build job:
+
+1. validates tag/version/changelog state;
+2. builds wheel + sdist;
+3. runs `twine check`;
+4. requires exactly the expected wheel and sdist filenames;
+5. generates `SHA256SUMS`;
+6. installs only the built wheel into an isolated virtual environment;
+7. runs the installed-distribution package smoke;
+8. uploads the verified build products as a short-lived GitHub Actions artifact.
+
+`dry-run` stops after this stage.
+
+## PyPI Trusted Publishing setup
+
+The repository intentionally stores no PyPI password or long-lived API token.
+
+Before the first real publish, configure PyPI Trusted Publishing for these exact values:
+
+```text
+PyPI project:      portable-ai-context
+GitHub owner:      jzhao0
+GitHub repository: portable-ai-context
+Workflow filename: release.yml
+Environment:       pypi
+```
+
+If the PyPI project does not yet exist, PyPI supports a **pending publisher** that creates the project on first successful OIDC publication. A pending publisher does not reserve the project name before first publication.
+
+Official references:
+
+- https://docs.pypi.org/trusted-publishers/
+- https://docs.pypi.org/trusted-publishers/creating-a-project-through-oidc/
+- https://docs.pypi.org/trusted-publishers/using-a-publisher/
+
+## GitHub `pypi` environment
+
+Create a GitHub Actions environment named exactly:
+
+```text
+pypi
+```
+
+Recommended protections before the first real publish:
+
+- require manual approval by the repository owner/maintainer;
+- restrict deployment to protected release tags where available;
+- protect `v*` tag creation/modification so ordinary contributors cannot create release identities;
+- keep the publishing job limited to artifact download + Trusted Publishing only.
+
+The PyPI OIDC permission (`id-token: write`) exists only on the `pypi-publish` job. Build, verification, and GitHub Release jobs do not receive it.
+
+## Trusted publication and attestations
+
+The publish job uses the official PyPA action at the exact immutable release tag:
+
+```text
+pypa/gh-action-pypi-publish@v1.14.2
+```
+
+Trusted Publishing exchanges the GitHub Actions OIDC identity for a short-lived PyPI credential; no repository secret is required.
+
+The PyPA action generates and uploads PEP 740-compatible PyPI attestations by default when used with Trusted Publishing. Those attestations bind uploaded distributions to the publishing workflow identity; they do not by themselves prove that the source code is trustworthy.
+
+Official references:
+
+- https://docs.pypi.org/attestations/
+- https://docs.pypi.org/attestations/producing-attestations/
+
+## Dry-run procedure
+
+A dry-run requires an **existing** release tag because the same tagged-build path is exercised as publish mode.
+
+Before creating the tag:
+
+1. merge the final release-preparation commit to `main`;
+2. ensure normal CI is green;
+3. update the changelog as appropriate for the intended stage;
+4. create the `vX.Y.ZaN` tag on the intended `main` commit.
+
+Then open GitHub Actions → **Release alpha** → **Run workflow** and enter:
+
+```text
+release_tag: v0.1.0a2
+mode:        dry-run
+```
+
+A successful dry-run proves the tagged commit builds the exact expected wheel/sdist pair, produces checksums, and the built wheel passes an isolated install smoke. It does not mint an OIDC credential and does not contact the PyPI upload endpoint.
+
+## Publish procedure
+
+Do not select `publish` until all release gates are satisfied, including any evidence limitations that the release notes must disclose.
+
+Run:
+
+```text
+release_tag: v0.1.0a2
+mode:        publish
+```
+
+The workflow performs these stages in order:
+
+```text
+Tagged main commit
+→ build + twine check + SHA256SUMS + isolated wheel smoke
+→ protected `pypi` environment approval
+→ OIDC Trusted Publishing to PyPI
+→ compare PyPI-reported SHA256 hashes with original SHA256SUMS
+→ fresh exact-version install from PyPI + package smoke
+→ create GitHub Release with the same wheel, sdist, and SHA256SUMS
+```
+
+The GitHub Release is created only after PyPI hash verification and fresh-install smoke succeed.
+
+## Published artifact verification
+
+`tools/verify_pypi_release.py` reads the PyPI release JSON API and compares the full published filename→SHA256 set against `SHA256SUMS`. Missing files, extra files, or hash mismatches fail closed.
+
+The GitHub Release receives the original build-job wheel, sdist, and `SHA256SUMS`, not files downloaded back from PyPI.
+
+## Failure and recovery boundaries
+
+### Failure before PyPI upload
+
+No package has been published. Fix the problem on a new commit. Do not move an already public release tag to a different commit; create the correct tag/version after the release state is fixed.
+
+### PyPI upload succeeds but post-publish verification fails
+
+Treat the release as suspect. Do not create a normal GitHub Release claiming success.
+
+Inspect the failure and, when the release is broken or unsafe, **yank the entire PyPI release** from the PyPI project release-management page and provide a reason. PyPI recommends yanking as the non-destructive response for broken/incompatible/security-problem releases; deletion is more disruptive and should not be the default rollback mechanism.
+
+Official reference:
+
+- https://docs.pypi.org/project-management/yanking/
+
+After remediation, publish a **new version** rather than attempting to overwrite an existing PyPI version.
+
+### PyPI verification succeeds but GitHub Release creation fails
+
+The PyPI files have already been verified against the original `SHA256SUMS`. Keep the evidence from the successful workflow run. Resolve the GitHub Release-specific problem without rebuilding or replacing the PyPI files. Any manually recovered GitHub Release must attach the exact stored artifacts/checksums from the successful build run and point to the same immutable tag.
+
+## Security invariants
+
+- No PyPI API token/password is committed or stored as a repository secret for this workflow.
+- `id-token: write` is scoped only to the publishing job.
+- The publishing job does not check out or execute repository code; it only downloads the prebuilt artifact and calls the official PyPA publishing action.
+- The tagged commit must already be in `main` history.
+- The release tag, project version, package version, built artifact names, PyPI hashes, and installed version must agree.
+- The workflow defaults to `dry-run`; publish requires an explicit mode choice and the protected `pypi` environment.
+- Existing PyPI versions are never intentionally overwritten.
