@@ -9,7 +9,8 @@ from portable_ai_context.models import Conversation, Message, SourceInfo
 from portable_ai_context.utils import source_fingerprint
 
 
-MARKER_RE = re.compile(r"^<<<(USER|ASSISTANT)>>>{0,1}\s*$", re.MULTILINE)
+V1_MARKER_RE = re.compile(r"^<<<(USER|ASSISTANT)>>>\s*$", re.MULTILINE)
+LEGACY_MARKER_RE = re.compile(r"^<<<(USER|ASSISTANT)>>>{0,1}\s*$", re.MULTILINE)
 
 
 def can_load(text: str) -> bool:
@@ -19,6 +20,7 @@ def can_load(text: str) -> bool:
 def load(source: str, text: str) -> Conversation:
     header_lines = text.splitlines()[:20]
     compact_v1 = FORMAT_HEADER in header_lines
+    marker_re = V1_MARKER_RE if compact_v1 else LEGACY_MARKER_RE
 
     title = ""
     for line in header_lines:
@@ -26,7 +28,7 @@ def load(source: str, text: str) -> Conversation:
             title = line[len("TITLE:"):].strip()
             break
 
-    matches = list(MARKER_RE.finditer(text))
+    matches = list(marker_re.finditer(text))
     messages: list[Message] = []
     for i, match in enumerate(matches):
         start = match.end()
