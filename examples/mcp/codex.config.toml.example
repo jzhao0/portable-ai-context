@@ -4,3 +4,5 @@
 [mcp_servers.paic]
 command = "paic"
 args = ["mcp", "--root", "/ABSOLUTE/PATH/TO/WORKSPACE"]
+enabled_tools = ["inspect_source", "conform_source", "build_checkpoint", "build_redaction_review"]
+default_tools_approval_mode = "prompt"
