@@ -78,10 +78,32 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  prepublish-tag-check:
+    name: Recheck release tag identity before PyPI
+    if: ${{ inputs.mode == 'publish' }}
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.build.outputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require release tag to still point to the built commit
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          EXPECTED_COMMIT: ${{ needs.build.outputs.commit }}
+        run: |
+          git fetch origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG" --force
+          ACTUAL_COMMIT="$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")"
+          test "$ACTUAL_COMMIT" = "$EXPECTED_COMMIT"
+
   pypi-publish:
     name: Publish verified distributions to PyPI
     if: ${{ inputs.mode == 'publish' }}
-    needs: build
+    needs: [build, prepublish-tag-check]
     runs-on: ubuntu-latest
     environment:
       name: pypi
@@ -109,12 +131,20 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.release_tag }}
-          fetch-depth: 1
+          ref: ${{ needs.build.outputs.commit }}
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.13'
+      - name: Require release tag to still point to the built commit after publication
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          EXPECTED_COMMIT: ${{ needs.build.outputs.commit }}
+        run: |
+          git fetch origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG" --force
+          ACTUAL_COMMIT="$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")"
+          test "$ACTUAL_COMMIT" = "$EXPECTED_COMMIT"
       - name: Download original build artifacts and checksums
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -144,6 +174,14 @@ jobs:
         with:
           name: release-dists-${{ inputs.release_tag }}
           path: release-artifacts
+      - name: Require release tag to still point to the built commit before GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          EXPECTED_COMMIT: ${{ needs.build.outputs.commit }}
+        run: |
+          ACTUAL_COMMIT="$(gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_TAG" --jq .sha)"
+          test "$ACTUAL_COMMIT" = "$EXPECTED_COMMIT"
       - name: Create release from the existing verified tag
         env:
           GH_TOKEN: ${{ github.token }}
