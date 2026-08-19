@@ -17,6 +17,11 @@ from .gemini import (
     DEFAULT_GEMINI_MAX_OUTPUT_TOKENS,
     GeminiBackend,
 )
+from .ollama import (
+    DEFAULT_OLLAMA_API_BASE,
+    DEFAULT_OLLAMA_NUM_PREDICT,
+    OllamaBackend,
+)
 from .openai_compatible import OpenAICompatibleBackend
 
 
@@ -89,10 +94,14 @@ def create_backend(name: str, config: BackendConfig) -> CompilerBackend:
     return backend
 
 
-def _validate_api_key_env(config: BackendConfig) -> str:
-    if not isinstance(config.api_key_env, str) or not _ENV_NAME_RE.fullmatch(config.api_key_env):
+def _validate_env_name(value: Any) -> str:
+    if not isinstance(value, str) or not _ENV_NAME_RE.fullmatch(value):
         raise CompilerError("compiler API-key environment variable name is invalid")
-    return config.api_key_env
+    return value
+
+
+def _validate_api_key_env(config: BackendConfig) -> str:
+    return _validate_env_name(config.api_key_env)
 
 
 def _resolve_api_key(config: BackendConfig) -> str:
@@ -160,6 +169,33 @@ def _gemini_factory(config: BackendConfig) -> CompilerBackend:
     )
 
 
+def _ollama_factory(config: BackendConfig) -> CompilerBackend:
+    api_base = config.api_base if config.api_base is not None else DEFAULT_OLLAMA_API_BASE
+    if not isinstance(api_base, str) or not api_base.strip():
+        raise CompilerError("ollama backend API base is invalid")
+
+    num_predict = config.options.get("ollama_num_predict", DEFAULT_OLLAMA_NUM_PREDICT)
+    if not isinstance(num_predict, int) or isinstance(num_predict, bool) or num_predict <= 0:
+        raise CompilerError("ollama num_predict must be a positive integer")
+
+    api_key: str | None = None
+    api_key_env = config.options.get("ollama_api_key_env")
+    if api_key_env is not None:
+        env_name = _validate_env_name(api_key_env)
+        resolved = config.environment.get(env_name)
+        if not isinstance(resolved, str) or not resolved:
+            raise CompilerError(f"environment variable {env_name!r} is not set")
+        api_key = resolved
+
+    return OllamaBackend(
+        api_base=api_base,
+        api_key=api_key,
+        num_predict=num_predict,
+        timeout=_validate_timeout(config),
+    )
+
+
 register_backend("anthropic", _anthropic_factory)
 register_backend("gemini", _gemini_factory)
+register_backend("ollama", _ollama_factory)
 register_backend("openai-compatible", _openai_compatible_factory)
