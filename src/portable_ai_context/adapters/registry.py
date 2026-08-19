@@ -5,7 +5,7 @@ from pathlib import Path
 from portable_ai_context.errors import UnsupportedSourceError
 from portable_ai_context.models import Conversation
 from portable_ai_context.utils import read_text
-from . import chatgpt_share, chatgpt_html, claude_json, clean_html, compact_txt, gemini_activity_json, jsonl
+from . import aicb, chatgpt_share, chatgpt_html, claude_json, clean_html, compact_txt, gemini_activity_json, jsonl
 
 
 def load_conversation(source: str) -> Conversation:
@@ -16,8 +16,11 @@ def load_conversation(source: str) -> Conversation:
     if not path.exists() or not path.is_file():
         raise UnsupportedSourceError(f"source does not exist or is unsupported: {source}")
 
-    text = read_text(path)
     suffix = path.suffix.lower()
+    if suffix == ".aicb":
+        return aicb.load(str(path))
+
+    text = read_text(path)
 
     if suffix in {".jsonl", ".ndjson"}:
         return jsonl.load(str(path), text)
