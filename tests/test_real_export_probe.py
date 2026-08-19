@@ -88,6 +88,7 @@ class RealExportProbeTests(unittest.TestCase):
                 "time": "2026-08-19T02:00:00Z",
                 "products": ["Gemini Apps"],
                 "safeHtmlItem": [{"html": f"<p>{GEMINI_SENTINEL}_OK</p>"}],
+                "details": f"PRIVATE_NEIGHBOR_BEFORE {GEMINI_SENTINEL} PRIVATE_NEIGHBOR_AFTER",
                 "locationInfos": "PRIVATE_LOCATION",
                 "account": {"email": "PRIVATE_GEMINI_ACCOUNT@example.invalid"},
                 "sessionToken": "PRIVATE_GEMINI_SESSION_TOKEN",
@@ -121,6 +122,8 @@ class RealExportProbeTests(unittest.TestCase):
         self.assertIn(GEMINI_SENTINEL + "_OK", safe)
         for forbidden in [
             "2026-08-19T02:00:00Z",
+            "PRIVATE_NEIGHBOR_BEFORE",
+            "PRIVATE_NEIGHBOR_AFTER",
             "PRIVATE_LOCATION",
             "PRIVATE_GEMINI_ACCOUNT@example.invalid",
             "PRIVATE_GEMINI_SESSION_TOKEN",
