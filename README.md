@@ -66,6 +66,12 @@ source .venv/bin/activate  # Windows: .venv\\Scripts\\activate
 pip install -e .
 ```
 
+Confirm the installed CLI version:
+
+```bash
+paic --version
+```
+
 Inspect a conversation:
 
 ```bash
@@ -108,6 +114,12 @@ For pages where direct capture is unreliable, the experimental Chromium browser 
 
 `paic` never requires API access for extraction, inspection, verification, or bundle creation.
 
+## Verification status
+
+The project distinguishes real live validation from synthetic/conformance coverage. ChatGPT shared-URL capture has real macOS, Windows, and Linux smoke evidence, and the browser extension has a real Windows Edge smoke. Claude and Gemini adapters currently have synthetic fixtures plus cross-platform CI; deliberately non-sensitive real-export validation remains tracked in Issue #17.
+
+See [`docs/release-readiness-0.1.0a2.md`](docs/release-readiness-0.1.0a2.md) for the full evidence ledger and known alpha limitations.
+
 ## Canonical model
 
 Every adapter produces a `Conversation` with:
@@ -139,9 +151,11 @@ This project grew from a working proof of concept built to migrate a very long C
 python -m unittest discover -s tests -v
 ```
 
+CI also builds wheel + sdist and smoke-tests the installed wheel in an isolated environment before release work proceeds.
+
 ## Status
 
-`0.1.0a1`: architecture/bootstrap milestone. APIs and schemas are not yet stable.
+`0.1.0a2` is prepared as the next alpha release candidate. Package/release CI is in place, but the version is **not considered published** until the tagged publication/checksum workflow in Issue #18 is completed. APIs and schemas remain alpha and may change before 1.0.
 
 ## License
 

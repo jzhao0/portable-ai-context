@@ -7,6 +7,7 @@ import platform
 from pathlib import Path
 import sys
 
+from . import __version__
 from .adapters import load_conversation
 from .compiler import OpenAICompatibleBackend, compile_migration
 from .errors import PortableAIContextError
@@ -141,6 +142,7 @@ def cmd_compile(args) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="paic", description="Portable AI Context")
+    p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     sub = p.add_subparsers(dest="command", required=True)
 
     inspect_p = sub.add_parser("inspect", help="inspect source, privacy, and integrity")
