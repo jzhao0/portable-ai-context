@@ -22,7 +22,7 @@
 - [x] Claude local single-conversation JSON export subset
 - [x] Gemini Apps Google My Activity JSON subset
 - [ ] Validate deliberately non-sensitive real Claude/Gemini exports (#17)
-- [ ] Claude shared/page adapter
+- [ ] Claude shared/page adapter (#68)
 - [ ] Gemini page/thread adapter when a reliable source contract exists
 - [ ] DeepSeek chat adapter (#58)
 - [ ] Grok adapter (#66)
