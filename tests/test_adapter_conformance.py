@@ -66,7 +66,7 @@ class AdapterConformanceTests(unittest.TestCase):
                 (
                     "chatgpt_html",
                     chatgpt_path,
-                    "chatgpt_saved_html",
+                    "chatgpt_html",
                     [
                         ("user", "Hello from user"),
                         ("assistant", "Hello from assistant"),
