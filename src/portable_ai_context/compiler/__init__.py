@@ -10,6 +10,7 @@ from .budget import (
     CallableTokenCounter,
     CompilationReport,
     PROFILE_BUDGETS,
+    TiktokenTokenCounter,
     TokenCounter,
 )
 from .gemini import (
@@ -43,6 +44,7 @@ __all__ = [
     "TokenCounter",
     "CharacterTokenCounter",
     "CallableTokenCounter",
+    "TiktokenTokenCounter",
     "PROFILE_BUDGETS",
     "OpenAICompatibleBackend",
     "AnthropicBackend",
