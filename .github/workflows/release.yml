@@ -1,0 +1,196 @@
+name: Release alpha
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing alpha tag to build, for example v0.1.0a2
+        required: true
+        type: string
+      mode:
+        description: dry-run builds/verifies only; publish enables PyPI + GitHub Release jobs
+        required: true
+        default: dry-run
+        type: choice
+        options:
+          - dry-run
+          - publish
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.release_tag }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build tagged distributions
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.guard.outputs.version }}
+      commit: ${{ steps.guard.outputs.commit }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.release_tag }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require tagged commit to be in main history
+        run: |
+          git fetch origin main --no-tags
+          git merge-base --is-ancestor HEAD origin/main
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+      - name: Validate tag and release metadata
+        id: guard
+        run: >-
+          python tools/release_guard.py
+          --tag "${{ inputs.release_tag }}"
+          --mode "${{ inputs.mode }}"
+          --github-output "$GITHUB_OUTPUT"
+      - name: Install build validation tooling
+        run: python -m pip install --upgrade pip build twine
+      - name: Build wheel and sdist from tagged commit
+        run: python -m build
+      - name: Validate distribution metadata
+        run: python -m twine check dist/*
+      - name: Validate exact artifact set and generate checksums
+        run: >-
+          python tools/release_guard.py
+          --tag "${{ inputs.release_tag }}"
+          --mode "${{ inputs.mode }}"
+          --artifacts-dir dist
+          --checksums SHA256SUMS
+      - name: Smoke built wheel in isolated environment
+        run: |
+          python -m venv .release-smoke-venv
+          .release-smoke-venv/bin/python -m pip install dist/*.whl
+          .release-smoke-venv/bin/python tools/package_smoke.py
+      - name: Upload verified release candidates
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-dists-${{ inputs.release_tag }}
+          path: |
+            dist/*
+            SHA256SUMS
+          if-no-files-found: error
+          retention-days: 14
+
+  prepublish-tag-check:
+    name: Recheck release tag identity before PyPI
+    if: ${{ inputs.mode == 'publish' }}
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.build.outputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require release tag to still point to the built commit
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          EXPECTED_COMMIT: ${{ needs.build.outputs.commit }}
+        run: |
+          git fetch origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG" --force
+          ACTUAL_COMMIT="$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")"
+          test "$ACTUAL_COMMIT" = "$EXPECTED_COMMIT"
+
+  pypi-publish:
+    name: Publish verified distributions to PyPI
+    if: ${{ inputs.mode == 'publish' }}
+    needs: [build, prepublish-tag-check]
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/portable-ai-context/${{ needs.build.outputs.version }}/
+    permissions:
+      id-token: write
+    steps:
+      - name: Download build-job distributions
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-dists-${{ inputs.release_tag }}
+          path: release-artifacts
+      - name: Publish with PyPI Trusted Publishing
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        with:
+          packages-dir: release-artifacts/dist/
+
+  verify-published:
+    name: Verify PyPI hashes and fresh install
+    if: ${{ inputs.mode == 'publish' }}
+    needs: [build, pypi-publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.build.outputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+      - name: Require release tag to still point to the built commit after publication
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          EXPECTED_COMMIT: ${{ needs.build.outputs.commit }}
+        run: |
+          git fetch origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG" --force
+          ACTUAL_COMMIT="$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")"
+          test "$ACTUAL_COMMIT" = "$EXPECTED_COMMIT"
+      - name: Download original build artifacts and checksums
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-dists-${{ inputs.release_tag }}
+          path: release-artifacts
+      - name: Verify PyPI file hashes match tagged build
+        run: >-
+          python tools/verify_pypi_release.py
+          --version "${{ needs.build.outputs.version }}"
+          --checksums release-artifacts/SHA256SUMS
+      - name: Fresh install exact published version
+        run: |
+          python -m venv .published-smoke-venv
+          .published-smoke-venv/bin/python -m pip install --no-cache-dir "portable-ai-context==${{ needs.build.outputs.version }}"
+          .published-smoke-venv/bin/python tools/package_smoke.py
+
+  github-release:
+    name: Create GitHub Release after PyPI verification
+    if: ${{ inputs.mode == 'publish' }}
+    needs: [build, verify-published]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download original build artifacts and checksums
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-dists-${{ inputs.release_tag }}
+          path: release-artifacts
+      - name: Require release tag to still point to the built commit before GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          EXPECTED_COMMIT: ${{ needs.build.outputs.commit }}
+        run: |
+          ACTUAL_COMMIT="$(gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_TAG" --jq .sha)"
+          test "$ACTUAL_COMMIT" = "$EXPECTED_COMMIT"
+      - name: Create release from the existing verified tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create "${{ inputs.release_tag }}"
+          release-artifacts/dist/*.whl
+          release-artifacts/dist/*.tar.gz
+          release-artifacts/SHA256SUMS
+          --repo "$GITHUB_REPOSITORY"
+          --verify-tag
+          --title "Portable AI Context ${{ inputs.release_tag }}"
+          --generate-notes
