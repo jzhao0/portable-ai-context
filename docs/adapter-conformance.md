@@ -28,6 +28,7 @@ It does **not** prove that a provider parser extracted every semantically correc
 
 - the canonical message stream is non-empty;
 - `source.kind` is present;
+- `source.kind` is a safe lowercase identifier matching `[a-z][a-z0-9_-]{0,63}`;
 - every role is in the current alpha canonical set: `user` or `assistant`;
 - message indices are exactly `0..N-1`;
 - every message has non-empty string text;
@@ -38,6 +39,22 @@ It does **not** prove that a provider parser extracted every semantically correc
 - JSONL export → reload preserves the canonical digest.
 
 Round-trip equality is digest-based. The integrity digest hashes canonical role + normalized text, so title/provenance differences between export formats do not create false failures.
+
+An invalid source kind is reported as `<invalid>` rather than echoed verbatim. This keeps the report content-free even if a manually constructed `Conversation` puts an unsafe/private-looking value in `source.kind`.
+
+## Compact TXT round-trip safety
+
+The shared round-trip contract exposed an ambiguity in the original marker-only compact TXT format: a legitimate message body line equal to `<<<USER>>>` or `<<<ASSISTANT>>>` could be mistaken for a message separator.
+
+New PAIC compact exports therefore include:
+
+```text
+FORMAT: paic-compact-v1
+```
+
+For compact-v1, exact marker-looking body lines are reversibly escaped with one additional leading backslash. Existing backslashes immediately before a marker are also preserved by adding/removing exactly one escape backslash. The compact-v1 parser uses strict three-closing-angle-bracket separators.
+
+Legacy compact TXT without the format header remains readable with the previous tolerant marker parser. The new escaping behavior is only activated for `paic-compact-v1`, so existing legacy body text is not silently rewritten.
 
 ## Source-specific test assertions
 
@@ -88,6 +105,7 @@ A successful CLI report resembles:
   "checks": {
     "message_stream_nonempty": true,
     "source_kind_present": true,
+    "source_kind_identifier": true,
     "canonical_roles": true,
     "contiguous_indices": true,
     "nonempty_text": true,
@@ -107,7 +125,8 @@ The CLI intentionally omits:
 - local source locator/path;
 - source fingerprint;
 - raw provider metadata;
-- forbidden values.
+- forbidden values;
+- unsafe source-kind values.
 
 If the source loads but violates the shared contract, `paic conform` prints the content-free report and exits with status `3`. Source parsing/recognition errors continue to use the normal PAIC error path.
 
@@ -118,6 +137,7 @@ Violation records contain only stable codes and generic messages. Current codes 
 ```text
 empty_message_stream
 missing_source_kind
+invalid_source_kind
 noncanonical_role
 noncontiguous_indices
 empty_message_text
@@ -148,10 +168,11 @@ For a new source adapter:
 
 1. add a deliberately synthetic source fixture containing an unambiguous user/assistant sequence;
 2. add fake runtime/account/tool/attachment values outside the supported text fields;
-3. load the fixture through the normal registry whenever possible;
-4. call `inspect_conformance` with `expected_messages` and `forbidden_values`;
-5. require `report.ok` and all checks to pass on the full CI matrix;
-6. add source-specific negative/malformed cases;
-7. obtain deliberately non-sensitive real-source evidence separately before upgrading compatibility claims.
+3. use a stable safe `source.kind` identifier rather than provider-controlled text;
+4. load the fixture through the normal registry whenever possible;
+5. call `inspect_conformance` with `expected_messages` and `forbidden_values`;
+6. require `report.ok` and all checks to pass on the full CI matrix;
+7. add source-specific negative/malformed cases;
+8. obtain deliberately non-sensitive real-source evidence separately before upgrading compatibility claims.
 
 The shared harness is an alpha contract and may evolve before the canonical schema is stabilized for 1.0.
