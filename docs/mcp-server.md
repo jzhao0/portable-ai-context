@@ -85,16 +85,14 @@ The server rejects:
 - unsupported source suffixes;
 - source files above the MCP source-size limit.
 
-Current allowed local suffixes are:
+Current allowed local suffixes are deliberately narrower than the standalone loader surface:
 
 ```text
 .aicb
 .jsonl
-.ndjson
 .json
 .txt
 .html
-.htm
 ```
 
 The current source-size ceiling is 64 MiB at the MCP boundary. Format-specific readers may impose additional limits.
@@ -122,7 +120,7 @@ and creates a fresh unique directory per write operation:
 
 This prevents an MCP tool call from targeting an arbitrary user file for overwrite.
 
-PAIC rejects the reserved artifact area/category if it is a symlink or non-directory. Newly created operation directories are checked to remain inside the configured root before source-derived bytes are written.
+PAIC rejects the reserved artifact area/category if it is a symlink or non-directory. Newly created operation directories are checked to remain inside the configured root before source-derived bytes are written. If a newly created empty artifact directory fails a later containment check, PAIC removes that empty directory on a best-effort basis before returning the fixed error.
 
 Returned artifact paths are root-relative POSIX-style strings. Absolute host filesystem paths are not returned to the model.
 
