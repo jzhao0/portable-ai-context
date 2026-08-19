@@ -9,6 +9,7 @@ import sys
 
 from . import __version__
 from .adapters import load_conversation
+from .checkpoint import MIN_BUDGET_TOKENS, build_extractive_checkpoint
 from .compiler import OpenAICompatibleBackend, compile_migration
 from .conformance import inspect_conformance
 from .errors import PortableAIContextError
@@ -25,6 +26,15 @@ def _positive_int(value: str) -> int:
     parsed = int(value)
     if parsed <= 0:
         raise argparse.ArgumentTypeError("must be a positive integer")
+    return parsed
+
+
+def _checkpoint_budget(value: str) -> int:
+    parsed = _positive_int(value)
+    if parsed < MIN_BUDGET_TOKENS:
+        raise argparse.ArgumentTypeError(
+            f"checkpoint budget must be at least {MIN_BUDGET_TOKENS} tokens"
+        )
     return parsed
 
 
@@ -103,6 +113,34 @@ def cmd_bundle(args) -> int:
     conv = load_conversation(args.source)
     path = write_bundle(conv, args.output)
     print(path)
+    return 0
+
+
+def cmd_checkpoint(args) -> int:
+    conv = load_conversation(args.source)
+    try:
+        result = build_extractive_checkpoint(
+            conv,
+            budget_tokens=args.budget,
+            profile=args.profile,
+            chars_per_token=args.chars_per_token,
+        )
+    except ValueError as exc:
+        raise PortableAIContextError(str(exc)) from exc
+    out = Path(args.output)
+    out.mkdir(parents=True, exist_ok=True)
+    checkpoint_path = out / "CHECKPOINT.md"
+    report_path = out / "checkpoint-report.json"
+    checkpoint_path.write_text(result.markdown, encoding="utf-8")
+    report_path.write_text(
+        json.dumps(result.report.to_dict(), ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    _print_json({
+        "checkpoint": str(checkpoint_path),
+        "report": str(report_path),
+        "summary": result.report.to_dict(),
+    })
     return 0
 
 
@@ -186,6 +224,31 @@ def build_parser() -> argparse.ArgumentParser:
     bundle_p.add_argument("source")
     bundle_p.add_argument("-o", "--output", required=True)
     bundle_p.set_defaults(func=cmd_bundle)
+
+    checkpoint_p = sub.add_parser(
+        "checkpoint",
+        help="build a deterministic no-AI extractive checkpoint",
+    )
+    checkpoint_p.add_argument("source")
+    checkpoint_p.add_argument("-o", "--output", required=True)
+    checkpoint_budget_group = checkpoint_p.add_mutually_exclusive_group()
+    checkpoint_budget_group.add_argument(
+        "--budget",
+        type=_checkpoint_budget,
+        help=f"target checkpoint token budget (minimum {MIN_BUDGET_TOKENS})",
+    )
+    checkpoint_budget_group.add_argument(
+        "--profile",
+        choices=["lite", "standard", "full"],
+        help="named checkpoint budget profile; defaults to standard",
+    )
+    checkpoint_p.add_argument(
+        "--chars-per-token",
+        type=_positive_float,
+        default=4.0,
+        help="character/token estimate used by the dependency-free counter",
+    )
+    checkpoint_p.set_defaults(func=cmd_checkpoint)
 
     compile_p = sub.add_parser("compile", help="compile a continuation-focused migration prompt")
     compile_p.add_argument("source")
