@@ -88,6 +88,49 @@ def _minimal_common_containers(
     return [value]
 
 
+def _parent_container(root: Any, target: Any) -> Any | None:
+    """Find the direct list/dict parent of ``target`` by object identity."""
+    if not isinstance(root, (dict, list)):
+        return None
+    children = root.values() if isinstance(root, dict) else root
+    for child in children:
+        if child is target:
+            return root
+        parent = _parent_container(child, target)
+        if parent is not None:
+            return parent
+    return None
+
+
+def _discovery_contexts(
+    document: Any,
+    user_sentinel: str,
+    assistant_sentinel: str,
+) -> list[Any]:
+    """Keep the minimal common container plus one object field label for arrays.
+
+    A minimal list such as a turn array has useful ordering but no field name.
+    If that list is directly stored under a JSON object key, retain exactly that
+    parent object so the sanitized specimen preserves the field label. Dict
+    candidates already expose their own field names and are not expanded.
+    """
+    contexts: list[Any] = []
+    seen: set[int] = set()
+    for candidate in _minimal_common_containers(
+        document, user_sentinel, assistant_sentinel
+    ):
+        context = candidate
+        if isinstance(candidate, list):
+            parent = _parent_container(document, candidate)
+            if isinstance(parent, dict):
+                context = parent
+        identity = id(context)
+        if identity not in seen:
+            seen.add(identity)
+            contexts.append(context)
+    return contexts
+
+
 def _sanitize_string(value: str, user_sentinel: str, assistant_sentinel: str) -> str:
     has_user = user_sentinel in value
     has_assistant = assistant_sentinel in value
@@ -125,22 +168,21 @@ def _sanitize(value: Any, user_sentinel: str, assistant_sentinel: str) -> Any:
 
 
 def _node_count(value: Any, *, stop_after: int) -> int:
-    count = 1
-    if count > stop_after:
-        return count
-    if isinstance(value, dict):
-        for key, item in value.items():
-            count += 1  # key node
-            if count > stop_after:
-                return count
-            count += _node_count(item, stop_after=stop_after - count)
-            if count > stop_after:
-                return count
-    elif isinstance(value, list):
-        for item in value:
-            count += _node_count(item, stop_after=stop_after - count)
-            if count > stop_after:
-                return count
+    count = 0
+    stack = [value]
+    while stack:
+        node = stack.pop()
+        count += 1
+        if count > stop_after:
+            return count
+        if isinstance(node, dict):
+            for key, item in node.items():
+                count += 1  # count the structural key separately
+                if count > stop_after:
+                    return count
+                stack.append(item)
+        elif isinstance(node, list):
+            stack.extend(node)
     return count
 
 
@@ -281,26 +323,24 @@ def run_probe(
             f"user occurrences: {user_occurrences}; assistant occurrences: {assistant_occurrences}"
         )
 
-    candidates: list[Any] = []
+    contexts: list[Any] = []
     for document in documents:
-        candidates.extend(
-            _minimal_common_containers(document, user_sentinel, assistant_sentinel)
-        )
-    if len(candidates) != 1:
+        contexts.extend(_discovery_contexts(document, user_sentinel, assistant_sentinel))
+    if len(contexts) != 1:
         raise ProbeError(
-            "expected exactly one minimal JSON container containing both Grok sentinels; "
-            f"found {len(candidates)}"
+            "expected exactly one minimal JSON context containing both Grok sentinels; "
+            f"found {len(contexts)}"
         )
 
-    candidate = candidates[0]
-    nodes = _node_count(candidate, stop_after=max_specimen_nodes)
+    context = contexts[0]
+    nodes = _node_count(context, stop_after=max_specimen_nodes)
     if nodes > max_specimen_nodes:
         raise ProbeError(
             "minimal Grok sentinel context exceeds the structural node limit; "
             "do not manually trim the raw export"
         )
 
-    specimen = _sanitize(candidate, user_sentinel, assistant_sentinel)
+    specimen = _sanitize(context, user_sentinel, assistant_sentinel)
     encoded = (json.dumps(specimen, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
     if user_sentinel.encode("utf-8") not in encoded or assistant_sentinel.encode("utf-8") not in encoded:
         raise ProbeError("sanitized specimen unexpectedly lost a Grok sentinel")
@@ -311,14 +351,14 @@ def run_probe(
     return {
         "ok": True,
         "provider": "grok",
-        "probe_mode": "unknown_schema_minimal_common_container_v1",
+        "probe_mode": "unknown_schema_minimal_common_context_v1",
         "json_documents_scanned": len(documents),
         "jsonl_records_scanned": jsonl_records,
         "html_documents_seen": html_count,
         "other_files_seen": other_count,
         "user_sentinel_occurrences": user_occurrences,
         "assistant_sentinel_occurrences": assistant_occurrences,
-        "minimal_context_type": "object" if isinstance(candidate, dict) else "array",
+        "minimal_context_type": "object" if isinstance(context, dict) else "array",
         "minimal_context_nodes": nodes,
         "sanitized_specimen_sha256": _sha256_bytes(encoded),
         "sanitized_specimen_bytes": len(encoded),
