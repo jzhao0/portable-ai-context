@@ -62,6 +62,8 @@ The in-memory result follows [`../schemas/browser-capture.schema.json`](../schem
 
 No page URL, page title, cookies, account identifiers, request headers, session/bootstrap objects, or unrelated DOM/runtime state are part of the contract.
 
+The snapshot-review metrics described below are derived locally in the popup from this existing payload. They do not change `paic-browser-capture-1` and are not written into the canonical JSONL download.
+
 ## Preview-before-download flow
 
 1. Open the target conversation and click the extension.
@@ -69,13 +71,36 @@ No page URL, page title, cookies, account identifiers, request headers, session/
 3. Review:
    - canonical message count;
    - adapter used;
-   - last-user preview;
-   - last-assistant preview;
-   - ignored/empty node counts.
-4. Only then does **Download JSONL** become enabled.
-5. The generated filename contains a timestamp only, not the page title or URL.
+   - first captured role and last captured role;
+   - consecutive same-role transition count;
+   - ignored/empty role-node counts;
+   - first-user and first-assistant previews;
+   - last-user and last-assistant previews;
+   - the permanent `DOM completeness: not proven` notice.
+4. If the thread is long, scroll through the full conversation in the page, reopen the popup, run **Inspect conversation** again, and compare the message count plus beginning/tail previews.
+5. Only after that manual review should you use **Download JSONL**.
+6. The generated filename contains a timestamp only, not the page title or URL.
 
-Tail previews are intentionally truncated for UI display only. The downloaded canonical message text is not truncated.
+All previews are intentionally truncated for UI display only. The downloaded canonical message text is not preview-truncated.
+
+## Snapshot completeness boundary
+
+The extension cannot prove that a provider rendered every historical message into the current DOM. Modern chat pages can virtualize, lazy-load, or unload earlier nodes while still leaving a valid-looking visible tail.
+
+For that reason the popup **never** reports `complete=true`. Instead it exposes review signals:
+
+```text
+message count
+first/last captured role
+same-role transition count
+ignored/empty role-node counts
+beginning previews
+tail previews
+```
+
+These are diagnostics, not authenticity/completeness proofs. A first captured `assistant`, a last captured `user`, or consecutive same-role messages can be legitimate. Conversely, a perfectly alternating sequence can still be incomplete if the page omitted older DOM nodes.
+
+The recommended workflow is therefore manual and conservative: scroll through the thread, inspect again, and compare the beginning/tail previews and count with what you expect to exist before downloading.
 
 ## Export format
 
