@@ -9,7 +9,7 @@ from .conformance import inspect_conformance
 from .errors import PortableAIContextError
 from .integrity import inspect as inspect_integrity, message_hash
 from .models import Conversation
-from .privacy import BODY_PATTERNS
+from .privacy import redact_body_text, redaction_count_template
 from .utils import normalize_text
 
 
@@ -29,11 +29,6 @@ _ENGLISH_STATE_RE = re.compile(
 _CHINESE_STATE_RE = re.compile(
     r"(?:下一步|待办|未完成|阻塞|等待|剩余|报错|错误|失败|通过|验证|确认|"
     r"版本|提交|合并|关闭|问题|必须|不要|不能|隐私|安全|要求|当前|继续)"
-)
-_PRIVATE_KEY_MATERIAL_RE = re.compile(
-    r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----.*?"
-    r"(?:-----END (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|\Z)",
-    re.DOTALL,
 )
 _REASON_ORDER = {
     "latest_user": 0,
@@ -99,24 +94,10 @@ def _state_marker_hits(text: str) -> int:
     return len(_ENGLISH_STATE_RE.findall(text)) + len(_CHINESE_STATE_RE.findall(text))
 
 
-def _redaction_count_template() -> dict[str, int]:
-    return {"private_key_material": 0, **{name: 0 for name in BODY_PATTERNS}}
-
-
-def _redact_text(text: str) -> tuple[str, dict[str, int]]:
-    counts = _redaction_count_template()
-    redacted, count = _PRIVATE_KEY_MATERIAL_RE.subn("[REDACTED:private_key_material]", text)
-    counts["private_key_material"] = count
-    for name, pattern in BODY_PATTERNS.items():
-        redacted, count = pattern.subn(f"[REDACTED:{name}]", redacted)
-        counts[name] = count
-    return normalize_text(redacted), counts
-
-
 def _prepare_messages(conversation: Conversation) -> list[_PreparedMessage]:
     prepared: list[_PreparedMessage] = []
     for message in conversation.messages:
-        safe_text, redaction_counts = _redact_text(message.text)
+        safe_text, redaction_counts = redact_body_text(message.text)
         prepared.append(
             _PreparedMessage(
                 index=message.index,
@@ -263,7 +244,7 @@ def _phase_token_limit(total_available: int, fraction: float, floor: int = 64) -
 
 
 def _selected_redaction_counts(selected: dict[int, _SelectedMessage]) -> dict[str, int]:
-    totals = _redaction_count_template()
+    totals = redaction_count_template()
     for item in selected.values():
         for name, count in item.prepared.redaction_counts.items():
             totals[name] += count
