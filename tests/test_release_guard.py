@@ -83,6 +83,11 @@ class ReleaseGuardTests(unittest.TestCase):
         with mock.patch.object(Path, "read_text", return_value="# Changelog\n\n## 0.1.0a2 — Unreleased\n"):
             release_guard._validate_changelog("0.1.0a2", "dry-run")
 
+    def test_changelog_version_match_does_not_accept_longer_prefix(self):
+        with mock.patch.object(Path, "read_text", return_value="# Changelog\n\n## 0.1.0a20 — Released\n"):
+            with self.assertRaisesRegex(release_guard.ReleaseGuardError, "exactly one heading"):
+                release_guard._validate_changelog("0.1.0a2", "dry-run")
+
 
 if __name__ == "__main__":
     unittest.main()
