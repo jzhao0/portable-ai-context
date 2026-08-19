@@ -16,7 +16,7 @@ class CompilerBackend(Protocol):
     ) -> str: ...
 ```
 
-The pipeline does not need to know whether a completion came from an OpenAI-compatible endpoint, Anthropic, Gemini, a future Ollama transport, or a deterministic test backend.
+The pipeline does not need to know whether a completion came from an OpenAI-compatible endpoint, Anthropic, Gemini, Ollama, or a deterministic test backend.
 
 The alpha registry/factory layer lets the CLI choose and construct provider transports without modifying `compile_migration()`.
 
@@ -28,6 +28,7 @@ Current built-ins are:
 openai-compatible  (default)
 anthropic
 gemini
+ollama
 ```
 
 The OpenAI-compatible path remains the default for backward compatibility:
@@ -75,9 +76,22 @@ paic compile conversation.clean.html \
   -o migration
 ```
 
-See [`anthropic-backend.md`](anthropic-backend.md) and [`gemini-backend.md`](gemini-backend.md) for provider-specific request, completion, and error contracts.
+Default local Ollama selection:
 
-`--api-base`, `--api-key-env`, and `--timeout` remain shared compiler-construction inputs. Provider-specific validation belongs to the selected backend factory rather than the compiler pipeline.
+```bash
+paic compile conversation.clean.html \
+  --backend ollama \
+  --map-model <local-model> \
+  --final-model <local-model> \
+  --ollama-num-predict 4096 \
+  -o migration
+```
+
+The Ollama backend defaults to `http://localhost:11434` and does **not** consume the global `--api-key-env` value. Optional Ollama bearer authentication is explicitly opt-in through `--ollama-api-key-env`; changing `--api-base` to a remote host can cause network access.
+
+See [`anthropic-backend.md`](anthropic-backend.md), [`gemini-backend.md`](gemini-backend.md), and [`ollama-backend.md`](ollama-backend.md) for provider-specific request, completion, and error contracts.
+
+`--api-base`, `--api-key-env`, and `--timeout` remain shared compiler-construction inputs. Provider-specific validation belongs to the selected backend factory rather than the compiler pipeline. Ollama intentionally does not reuse the shared API-key env unless its own provider-specific key option is supplied.
 
 ## Python registry API
 
@@ -98,6 +112,7 @@ The registry uses safe lowercase identifiers such as:
 openai-compatible
 anthropic
 gemini
+ollama
 future-provider
 local_model
 ```
@@ -118,11 +133,11 @@ backend = create_backend("provider-name", config)
 
 `BackendConfig.environment` and `BackendConfig.options` are excluded from the dataclass representation. This reduces the chance that normal debugging accidentally expands environment secrets or future provider options.
 
-Built-in factories resolve API keys from a configured environment-variable **name**. Key values are not stored directly in `BackendConfig`.
+Remote built-in factories resolve API keys from configured environment-variable **names**. Key values are not stored directly in `BackendConfig`. Ollama is the deliberate exception: its default local construction is keyless and ignores the global compiler API-key setting unless an Ollama-specific env-name option is supplied.
 
 ## Adding another built-in provider
 
-A future Ollama/local implementation should follow the same separation already used by Anthropic and Gemini:
+A future provider should follow the same separation already used by Anthropic, Gemini, and Ollama:
 
 1. implement a backend object with `complete(model, system, user, stage)`;
 2. implement a small factory that validates/resolves its construction inputs;
@@ -145,7 +160,7 @@ A backend may use that metadata for logging/routing, but it must still return pl
 
 Normal compiler errors must be safe to show to the user.
 
-Built-in remote transports therefore do **not** include these values in `CompilerError` text:
+Built-in transports therefore do **not** include these values in `CompilerError` text:
 
 - API-key values;
 - system/user prompts;
@@ -155,7 +170,7 @@ Built-in remote transports therefore do **not** include these values in `Compile
 - raw transport error details;
 - provider URLs.
 
-Provider-specific untrusted values that become transport state, such as Gemini model URL input or finish/block details, are also omitted from normal errors when invalid or filtered.
+Provider-specific untrusted values that become transport state, such as Gemini model URL input, Ollama base/model input, finish/block details, reasoning/thinking text, or tool payloads, are also omitted from normal errors when invalid or filtered.
 
 The original exception is preserved through Python exception chaining where applicable, but the normal PAIC CLI prints only the safe `CompilerError` message.
 
@@ -181,7 +196,6 @@ Current non-goals:
 
 - no Python package entry-point discovery;
 - no third-party automatic plugin loading;
-- no Ollama/local transport yet;
 - no change to map/reduce/final/budget prompt semantics.
 
 Python callers can continue bypassing the registry entirely and inject any compatible backend directly:
