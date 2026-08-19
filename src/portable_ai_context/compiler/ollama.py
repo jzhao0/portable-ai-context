@@ -11,6 +11,7 @@ from portable_ai_context.errors import CompilerError
 DEFAULT_OLLAMA_API_BASE = "http://localhost:11434"
 DEFAULT_OLLAMA_NUM_PREDICT = 4096
 _MAX_MODEL_NAME_CHARS = 256
+_MAX_PATH_DECODE_PASSES = 8
 
 
 def _validate_model_name(model: str) -> str:
@@ -23,23 +24,58 @@ def _validate_model_name(model: str) -> str:
     return model
 
 
+def _has_unsafe_url_character(value: str) -> bool:
+    return any(
+        character == "\\"
+        or character.isspace()
+        or ord(character) < 32
+        or ord(character) == 127
+        for character in value
+    )
+
+
+def _fully_decode_path(path: str) -> str:
+    decoded = path
+    for _ in range(_MAX_PATH_DECODE_PASSES):
+        next_value = urllib.parse.unquote(decoded)
+        if next_value == decoded:
+            return decoded
+        decoded = next_value
+    # An unusually deep encoding chain is not needed for a normal Ollama base.
+    raise CompilerError("ollama backend API base is invalid")
+
+
 def _normalize_api_base(api_base: str) -> tuple[str, str]:
-    if not isinstance(api_base, str) or not api_base or api_base != api_base.strip():
+    if (
+        not isinstance(api_base, str)
+        or not api_base
+        or api_base != api_base.strip()
+        or _has_unsafe_url_character(api_base)
+    ):
         raise CompilerError("ollama backend API base is invalid")
+
     try:
         parsed = urllib.parse.urlsplit(api_base)
+        hostname = parsed.hostname
+        # Accessing `.port` deliberately forces urllib to reject malformed or
+        # out-of-range ports before a request object is constructed.
+        parsed.port
     except ValueError as exc:
         raise CompilerError("ollama backend API base is invalid") from exc
 
-    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc or not hostname:
         raise CompilerError("ollama backend API base is invalid")
     if parsed.username is not None or parsed.password is not None:
         raise CompilerError("ollama backend API base is invalid")
     if parsed.query or parsed.fragment:
         raise CompilerError("ollama backend API base is invalid")
 
-    decoded_path = urllib.parse.unquote(parsed.path)
-    if "\\" in decoded_path:
+    decoded_netloc = urllib.parse.unquote(parsed.netloc)
+    if _has_unsafe_url_character(decoded_netloc):
+        raise CompilerError("ollama backend API base is invalid")
+
+    decoded_path = _fully_decode_path(parsed.path)
+    if _has_unsafe_url_character(decoded_path):
         raise CompilerError("ollama backend API base is invalid")
     path_parts = [part for part in decoded_path.split("/") if part]
     if any(part in {".", ".."} for part in path_parts):
