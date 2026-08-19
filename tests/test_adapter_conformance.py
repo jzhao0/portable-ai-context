@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
 
 from _helpers import sample_conversation, synthetic_chatgpt_html
 from portable_ai_context.adapters.registry import load_conversation
@@ -197,6 +198,38 @@ class AdapterConformanceTests(unittest.TestCase):
         self.assertNotIn("Privacy boundary verified.", output)
         self.assertNotIn("PRIVATE_ACCOUNT@example.invalid", output)
         self.assertNotIn(str(fixture), output)
+
+    def test_cli_conform_failure_is_content_free_and_returns_three(self):
+        private_value = "PRIVATE_FAILURE_VALUE_DO_NOT_ECHO"
+        private_source = r"C:\Users\PRIVATE_USER\Secret Conversations\source.json"
+        conversation = Conversation(
+            title="PRIVATE_TITLE_DO_NOT_ECHO",
+            source=SourceInfo(kind="synthetic", metadata={"runtime": private_value}),
+            messages=[
+                Message(role="system", text="PRIVATE_MESSAGE_DO_NOT_ECHO", index=7),
+            ],
+        )
+
+        stdout = io.StringIO()
+        with mock.patch("portable_ai_context.cli.load_conversation", return_value=conversation):
+            with contextlib.redirect_stdout(stdout):
+                code = cli_main(["conform", private_source])
+        output = stdout.getvalue()
+        report = json.loads(output)
+
+        self.assertEqual(code, 3)
+        self.assertFalse(report["ok"])
+        self.assertEqual(report["source_kind"], "synthetic")
+        self.assertIn("noncanonical_role", {item["code"] for item in report["violations"]})
+        for forbidden in [
+            private_value,
+            private_source,
+            "PRIVATE_USER",
+            "Secret Conversations",
+            "PRIVATE_TITLE_DO_NOT_ECHO",
+            "PRIVATE_MESSAGE_DO_NOT_ECHO",
+        ]:
+            self.assertNotIn(forbidden, output)
 
 
 if __name__ == "__main__":
