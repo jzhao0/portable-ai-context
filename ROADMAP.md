@@ -26,7 +26,7 @@
 - [ ] DeepSeek chat adapter
 - [ ] Grok adapter
 - [x] Minimal generic browser DOM capture contract (`role_attribute_v1`)
-- [ ] Shared adapter conformance harness beyond adapter-specific tests
+- [x] Shared adapter conformance harness + content-free `paic conform` (#25)
 
 ## v0.3 — Better context compilation
 
