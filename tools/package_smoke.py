@@ -3,7 +3,6 @@ from __future__ import annotations
 import importlib.metadata
 import json
 from pathlib import Path
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -34,12 +33,13 @@ def main() -> int:
     if "site-packages" not in package_path.parts:
         raise SystemExit(f"package smoke is not using an installed wheel: {package_path}")
 
-    paic = shutil.which("paic")
-    if not paic:
-        raise SystemExit("installed wheel did not provide the paic console script")
+    script_name = "paic.exe" if sys.platform == "win32" else "paic"
+    paic = Path(sys.executable).with_name(script_name)
+    if not paic.is_file():
+        raise SystemExit(f"installed wheel did not provide the paic console script at {paic}")
 
     help_run = subprocess.run(
-        [paic, "--help"],
+        [str(paic), "--help"],
         check=True,
         capture_output=True,
         text=True,
@@ -50,7 +50,7 @@ def main() -> int:
     with tempfile.TemporaryDirectory() as td:
         fixture = Path(td) / "package-smoke.jsonl"
         fixture.write_text(
-            '\n'.join(
+            "\n".join(
                 [
                     json.dumps({"role": "user", "text": "package smoke question"}),
                     json.dumps({"role": "assistant", "text": "package smoke answer"}),
@@ -60,7 +60,7 @@ def main() -> int:
             encoding="utf-8",
         )
         inspect_run = subprocess.run(
-            [paic, "inspect", str(fixture)],
+            [str(paic), "inspect", str(fixture)],
             check=True,
             capture_output=True,
             text=True,
