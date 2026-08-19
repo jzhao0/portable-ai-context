@@ -13,6 +13,7 @@ from .checkpoint import MIN_BUDGET_TOKENS, build_extractive_checkpoint
 from .compiler import (
     DEFAULT_ANTHROPIC_MAX_TOKENS,
     DEFAULT_GEMINI_MAX_OUTPUT_TOKENS,
+    DEFAULT_OLLAMA_NUM_PREDICT,
     BackendConfig,
     compile_migration,
     create_backend,
@@ -162,6 +163,8 @@ def cmd_compile(args) -> int:
             options={
                 "anthropic_max_tokens": args.anthropic_max_tokens,
                 "gemini_max_output_tokens": args.gemini_max_output_tokens,
+                "ollama_num_predict": args.ollama_num_predict,
+                "ollama_api_key_env": args.ollama_api_key_env,
             },
         ),
     )
@@ -273,7 +276,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     compile_p.add_argument(
         "--api-base",
-        help="provider API base URL; required by openai-compatible, optional for anthropic/gemini",
+        help="provider API base URL; required by openai-compatible, optional for anthropic/gemini/ollama",
     )
     compile_p.add_argument("--api-key-env", default="PAIC_API_KEY")
     compile_p.add_argument("--map-model", required=True)
@@ -294,6 +297,22 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Gemini generateContent maxOutputTokens per completion "
             f"(default: {DEFAULT_GEMINI_MAX_OUTPUT_TOKENS})"
+        ),
+    )
+    compile_p.add_argument(
+        "--ollama-num-predict",
+        type=_positive_int,
+        default=DEFAULT_OLLAMA_NUM_PREDICT,
+        help=(
+            "Ollama native chat num_predict per completion "
+            f"(default: {DEFAULT_OLLAMA_NUM_PREDICT})"
+        ),
+    )
+    compile_p.add_argument(
+        "--ollama-api-key-env",
+        help=(
+            "optional Ollama-specific bearer-key environment variable; "
+            "unset by default so localhost remains keyless"
         ),
     )
     compile_p.add_argument("--chunk-chars", type=_positive_int, default=120000)
