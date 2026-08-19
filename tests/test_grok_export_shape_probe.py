@@ -73,7 +73,7 @@ class GrokExportShapeProbeTests(unittest.TestCase):
         self.assertEqual(report["provider"], "grok")
         self.assertEqual(
             report["probe_mode"],
-            "unknown_schema_minimal_common_container_v1",
+            "unknown_schema_minimal_common_context_v1",
         )
         self.assertEqual(report["user_sentinel_occurrences"], 1)
         self.assertEqual(report["assistant_sentinel_occurrences"], 1)
@@ -85,6 +85,8 @@ class GrokExportShapeProbeTests(unittest.TestCase):
 
         self.assertIn(DEFAULT_USER_SENTINEL, safe)
         self.assertIn(DEFAULT_ASSISTANT_SENTINEL, safe)
+        # The minimal common container is the turn array. The discovery contract
+        # preserves exactly one direct parent object so the field label survives.
         self.assertIn('"unknown_turns"', safe)
         self.assertIn('"speaker": "user"', safe)
         self.assertIn('"speaker": "assistant"', safe)
@@ -130,7 +132,7 @@ class GrokExportShapeProbeTests(unittest.TestCase):
             {"first": DEFAULT_USER_SENTINEL, "private": "SECRET_ONE"},
             {"second": DEFAULT_ASSISTANT_SENTINEL, "private": "SECRET_TWO"},
         ]
-        # Two independent JSONL records do not have one shared JSON container, so
+        # Two independent JSONL records do not have one shared JSON context, so
         # discovery must fail rather than invent a conversation boundary.
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -139,7 +141,7 @@ class GrokExportShapeProbeTests(unittest.TestCase):
                 "\n".join(json.dumps(item) for item in records) + "\n",
                 encoding="utf-8",
             )
-            with self.assertRaisesRegex(ProbeError, "minimal JSON container"):
+            with self.assertRaisesRegex(ProbeError, "minimal JSON context"):
                 run_probe(
                     source=source,
                     user_sentinel=DEFAULT_USER_SENTINEL,
