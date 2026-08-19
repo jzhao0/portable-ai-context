@@ -1,0 +1,12 @@
+{
+  "message_count": 4,
+  "user_count": 2,
+  "assistant_count": 2,
+  "conversation_digest": "a447e6a46043d4f763e3e13ac1ec00f15cb7003758c5504977ba8925aa7b1ce4",
+  "first_message_hash": "9a54630a3bce39bf0f06fc0cea2d176bbefdb13e030b926c4fe92f17c65fa967",
+  "last_message_hash": "409be5b51f37338ad500278f30df0b162257db59dd78ee211c0ae32520f8b8c2",
+  "last_user_hash": "c5dd038e4e67200de5ec161361720f50e5616beed639f3ac939c29461c8c6d38",
+  "last_assistant_hash": "409be5b51f37338ad500278f30df0b162257db59dd78ee211c0ae32520f8b8c2",
+  "snapshot_updated_at": null,
+  "raw_node_count": null
+}

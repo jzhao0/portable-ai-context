@@ -1,0 +1,11 @@
+{
+  "runtime_marker_counts": {},
+  "body_secret_counts": {
+    "openai_style_key": 0,
+    "github_token": 0,
+    "aws_access_key": 0,
+    "bearer_token": 0,
+    "private_key_header": 0
+  },
+  "safe_to_share_automatically": true
+}
