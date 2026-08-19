@@ -26,6 +26,7 @@ The design goals are:
 - Migrator Clean HTML
 - compact TXT (`<<<USER>>>` / `<<<ASSISTANT>>>`)
 - JSONL (`role`, `text`)
+- `.aicb` `0.1-alpha` bundles after strict in-memory structure/integrity validation
 - saved ChatGPT share-page HTML / safe archive HTML
 - ChatGPT shared URL (**experimental**; browser fallback is best-effort)
 - single-conversation Claude JSON export subset (local `.json`; see [`docs/claude-adapter.md`](docs/claude-adapter.md))
@@ -108,6 +109,17 @@ Create a portable bundle:
 paic bundle conversation.clean.html -o project.aicb
 ```
 
+Reopen the bundle through the same source registry:
+
+```bash
+paic inspect project.aicb
+paic verify project.aicb
+paic conform project.aicb
+paic checkpoint project.aicb -o checkpoint-from-bundle
+```
+
+The alpha reader validates the ZIP member contract, resource limits, canonical JSONL shape, manifest count/digest, integrity counts/tail hashes, and recomputable privacy-body counts before returning a canonical conversation. It never extracts archive members to arbitrary paths. SHA256 checks provide internal consistency, **not author authenticity or a digital signature**. See [`docs/aicb-bundle.md`](docs/aicb-bundle.md).
+
 Verify integrity and tail metadata:
 
 ```bash
@@ -130,7 +142,7 @@ Named checkpoint/compiler budgets are `lite` (4,000), `standard` (16,000), and `
 
 For pages where direct capture is unreliable, the experimental Chromium browser extension uses only `activeTab` + `scripting`, previews message count and tail text before download, and exports canonical JSONL locally. See [`extension/README.md`](extension/README.md) and the [`browser-extension threat model`](docs/browser-extension-threat-model.md).
 
-`paic` never requires API access for extraction, inspection, conformance checking, deterministic checkpoint generation, verification, or bundle creation. Only AI-assisted `paic compile` requires a model backend.
+`paic` never requires API access for extraction, inspection, conformance checking, deterministic checkpoint generation, verification, or bundle creation/import. Only AI-assisted `paic compile` requires a model backend.
 
 ## Verification status
 
@@ -139,6 +151,8 @@ The project distinguishes real live validation from synthetic/conformance covera
 The shared adapter conformance contract adds one common post-canonicalization gate for current and future adapters. It verifies canonical roles/indices/text, integrity consistency, and clean HTML / compact TXT / JSONL digest-preserving round trips, but it does **not** replace real provider-source validation.
 
 The deterministic checkpoint mode is a reproducible extractive fallback, not a semantic summary. Its derived artifact pattern-redacts the secret-like formats currently recognized by PAIC while leaving canonical history unchanged; it is not a general confidentiality scrubber and should be reviewed before sharing.
+
+`.aicb` import recomputes canonical integrity rather than trusting the manifest/report at face value. The current strict `0.1-alpha` member contract and threat model are documented in [`docs/aicb-bundle.md`](docs/aicb-bundle.md). The schema remains unstable before 1.0.
 
 See [`docs/release-readiness-0.1.0a2.md`](docs/release-readiness-0.1.0a2.md) for the full evidence ledger and known alpha limitations.
 
@@ -152,7 +166,7 @@ Every adapter produces a `Conversation` with:
 - canonical roles
 - per-message metadata
 
-The initial bundle schema is documented in [`schemas/conversation-bundle.schema.json`](schemas/conversation-bundle.schema.json). It is explicitly **alpha** and may change before 1.0.
+The initial bundle manifest schema is documented in [`schemas/conversation-bundle.schema.json`](schemas/conversation-bundle.schema.json), and the importer/trust contract in [`docs/aicb-bundle.md`](docs/aicb-bundle.md). Both are explicitly **alpha** and may change before 1.0.
 
 ## Privacy model
 
@@ -173,7 +187,7 @@ This project grew from a working proof of concept built to migrate a very long C
 python -m unittest discover -s tests -v
 ```
 
-CI also builds wheel + sdist and smoke-tests the installed wheel, including the installed `paic conform` and `paic checkpoint` commands, in an isolated environment before release work proceeds.
+CI also builds wheel + sdist and smoke-tests the installed wheel in an isolated environment. The package smoke covers normal JSONL loading plus a real `bundle -> .aicb -> inspect/verify/conform/checkpoint` cycle.
 
 ## Status
 

@@ -7,7 +7,8 @@
 - [x] ChatGPT saved HTML adapter
 - [x] Privacy report
 - [x] Integrity report
-- [x] `.aicb` alpha bundle
+- [x] `.aicb` alpha bundle writer
+- [x] `.aicb` first-class strict reader / verifier (#29)
 - [x] OpenAI-compatible hierarchical migration compiler
 - [x] CLI
 - [x] Cross-platform unit-test matrix
@@ -52,7 +53,7 @@
 
 - [ ] MCP server
 - [ ] Claude Code / Codex / Cursor handoff recipes
-- [ ] `.aicb` import/export APIs
+- [x] `.aicb` import/export core APIs (#29)
 
 ## v1.0 — Stable portability contract
 
