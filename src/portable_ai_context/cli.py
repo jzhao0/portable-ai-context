@@ -10,7 +10,12 @@ import sys
 from . import __version__
 from .adapters import load_conversation
 from .checkpoint import MIN_BUDGET_TOKENS, build_extractive_checkpoint
-from .compiler import BackendConfig, compile_migration, create_backend
+from .compiler import (
+    DEFAULT_ANTHROPIC_MAX_TOKENS,
+    BackendConfig,
+    compile_migration,
+    create_backend,
+)
 from .conformance import inspect_conformance
 from .errors import PortableAIContextError
 from .exporters import write_bundle, write_standard
@@ -153,6 +158,7 @@ def cmd_compile(args) -> int:
             api_key_env=args.api_key_env,
             timeout=args.timeout,
             environment=os.environ,
+            options={"anthropic_max_tokens": args.anthropic_max_tokens},
         ),
     )
     out = Path(args.output)
@@ -263,11 +269,20 @@ def build_parser() -> argparse.ArgumentParser:
     )
     compile_p.add_argument(
         "--api-base",
-        help="provider API base URL; required by the openai-compatible backend",
+        help="provider API base URL; required by openai-compatible, optional for anthropic",
     )
     compile_p.add_argument("--api-key-env", default="PAIC_API_KEY")
     compile_p.add_argument("--map-model", required=True)
     compile_p.add_argument("--final-model", required=True)
+    compile_p.add_argument(
+        "--anthropic-max-tokens",
+        type=_positive_int,
+        default=DEFAULT_ANTHROPIC_MAX_TOKENS,
+        help=(
+            "Anthropic Messages API max_tokens per completion "
+            f"(default: {DEFAULT_ANTHROPIC_MAX_TOKENS})"
+        ),
+    )
     compile_p.add_argument("--chunk-chars", type=_positive_int, default=120000)
     compile_p.add_argument("--reduce-chars", type=_positive_int, default=180000)
     budget_group = compile_p.add_mutually_exclusive_group()

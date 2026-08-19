@@ -1,3 +1,9 @@
+from .anthropic import (
+    ANTHROPIC_API_VERSION,
+    DEFAULT_ANTHROPIC_API_BASE,
+    DEFAULT_ANTHROPIC_MAX_TOKENS,
+    AnthropicBackend,
+)
 from .base import CompilerBackend
 from .budget import (
     CharacterTokenCounter,
@@ -29,4 +35,8 @@ __all__ = [
     "CallableTokenCounter",
     "PROFILE_BUDGETS",
     "OpenAICompatibleBackend",
+    "AnthropicBackend",
+    "ANTHROPIC_API_VERSION",
+    "DEFAULT_ANTHROPIC_API_BASE",
+    "DEFAULT_ANTHROPIC_MAX_TOKENS",
 ]

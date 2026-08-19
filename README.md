@@ -16,7 +16,7 @@ The design goals are:
 - **Privacy-aware:** runtime/session metadata is excluded by whitelist; body-secret detection warns without printing secret values.
 - **Verifiable:** counts, message hashes, conversation digest, snapshot metadata, and tail hashes make truncation visible.
 - **Local-first:** extraction, normalization, inspection, conformance checking, deterministic checkpoint generation, and bundle creation need no AI API.
-- **Compiler-agnostic:** migration compilation uses an OpenAI-compatible backend today and is designed for more providers later.
+- **Compiler-agnostic:** migration compilation uses a common backend protocol with built-in OpenAI-compatible and Anthropic transports.
 - **Cross-platform:** the core and CLI are Python 3.10+ and avoid OS-specific dependencies.
 
 ## v0.1 alpha scope
@@ -43,7 +43,7 @@ The design goals are:
 - privacy report
 - content-free adapter conformance report
 - deterministic no-AI extractive checkpoint + reproducibility report
-- optional migration prompt via OpenAI-compatible API
+- optional migration prompt via OpenAI-compatible or Anthropic compiler backend
 - compile budget report with token estimates / exact injected counts when configured
 
 ### Not yet promised
@@ -53,6 +53,7 @@ The design goals are:
 - Claude shared-page HTML adapter
 - reconstruction of original Gemini chat-thread boundaries from flat My Activity exports
 - localized Gemini activity prompt formats beyond the documented alpha subset
+- Gemini/Ollama compiler transport
 - bundled model-specific exact tokenizer packages (exact counters can be injected through the compiler API)
 - Firefox browser-capture support or signed browser-store distribution
 - desktop GUI
@@ -131,12 +132,29 @@ Compile a semantic migration prompt using an OpenAI-compatible API:
 ```bash
 export PAIC_API_KEY='...'
 paic compile conversation.clean.html \\
+  --backend openai-compatible \\
   --api-base https://api.example.com/v1 \\
   --map-model fast-model \\
   --final-model strong-model \\
   --profile standard \\
   -o migration
 ```
+
+Or use the zero-dependency Anthropic Messages transport:
+
+```bash
+export ANTHROPIC_API_KEY='...'
+paic compile conversation.clean.html \\
+  --backend anthropic \\
+  --api-key-env ANTHROPIC_API_KEY \\
+  --map-model <map-model> \\
+  --final-model <final-model> \\
+  --anthropic-max-tokens 4096 \\
+  --profile standard \\
+  -o migration
+```
+
+PAIC does not hardcode an Anthropic model name. See [`docs/compiler-backends.md`](docs/compiler-backends.md) and [`docs/anthropic-backend.md`](docs/anthropic-backend.md) for transport/configuration and error/privacy boundaries.
 
 Named checkpoint/compiler budgets are `lite` (4,000), `standard` (16,000), and `full` (64,000) tokens. You can instead use `--budget <tokens>`. The dependency-free CLI uses an explicit character/token estimate; exact tokenizer counters can be injected through the Python APIs. See [`docs/token-budgets.md`](docs/token-budgets.md) and [`docs/deterministic-checkpoint.md`](docs/deterministic-checkpoint.md).
 
@@ -153,6 +171,8 @@ The shared adapter conformance contract adds one common post-canonicalization ga
 The deterministic checkpoint mode is a reproducible extractive fallback, not a semantic summary. Its derived artifact pattern-redacts the secret-like formats currently recognized by PAIC while leaving canonical history unchanged; it is not a general confidentiality scrubber and should be reviewed before sharing.
 
 `.aicb` import recomputes canonical integrity rather than trusting the manifest/report at face value. The current strict `0.1-alpha` member contract and threat model are documented in [`docs/aicb-bundle.md`](docs/aicb-bundle.md). The schema remains unstable before 1.0.
+
+Compiler transport tests are deterministic and do not spend a live provider API key in CI. The Anthropic backend is validated against the documented Messages request/response contract using mocked HTTP responses; a paid live API smoke remains a separate explicitly authorized activity.
 
 See [`docs/release-readiness-0.1.0a2.md`](docs/release-readiness-0.1.0a2.md) for the full evidence ledger and known alpha limitations.
 
@@ -187,7 +207,7 @@ This project grew from a working proof of concept built to migrate a very long C
 python -m unittest discover -s tests -v
 ```
 
-CI also builds wheel + sdist and smoke-tests the installed wheel in an isolated environment. The package smoke covers normal JSONL loading plus a real `bundle -> .aicb -> inspect/verify/conform/checkpoint` cycle.
+CI also builds wheel + sdist and smoke-tests the installed wheel in an isolated environment. The package smoke covers normal JSONL loading, a real `bundle -> .aicb -> inspect/verify/conform/checkpoint` cycle, and packaged compiler-backend CLI surfaces without making paid API calls.
 
 ## Status
 
