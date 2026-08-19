@@ -70,7 +70,7 @@ class GeminiBackend:
 
     def complete(self, *, model: str, system: str, user: str, stage: str) -> str:
         payload = {
-            "systemInstruction": {
+            "system_instruction": {
                 "parts": [{"text": system}],
             },
             "contents": [
@@ -148,6 +148,8 @@ class GeminiBackend:
         text_parts: list[str] = []
         for part in parts:
             if not isinstance(part, dict):
+                raise CompilerError("unexpected Gemini response shape")
+            if "thought" in part and not isinstance(part["thought"], bool):
                 raise CompilerError("unexpected Gemini response shape")
             if part.get("thought") is True:
                 continue
