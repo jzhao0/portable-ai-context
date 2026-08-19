@@ -31,15 +31,16 @@ jobs:
       version: ${{ steps.guard.outputs.version }}
       commit: ${{ steps.guard.outputs.commit }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.release_tag }}
           fetch-depth: 0
+          persist-credentials: false
       - name: Require tagged commit to be in main history
         run: |
           git fetch origin main --no-tags
           git merge-base --is-ancestor HEAD origin/main
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.13'
       - name: Validate tag and release metadata
@@ -68,7 +69,7 @@ jobs:
           .release-smoke-venv/bin/python -m pip install dist/*.whl
           .release-smoke-venv/bin/python tools/package_smoke.py
       - name: Upload verified release candidates
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-dists-${{ inputs.release_tag }}
           path: |
@@ -89,12 +90,12 @@ jobs:
       id-token: write
     steps:
       - name: Download build-job distributions
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: release-dists-${{ inputs.release_tag }}
           path: release-artifacts
       - name: Publish with PyPI Trusted Publishing
-        uses: pypa/gh-action-pypi-publish@v1.14.2
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
         with:
           packages-dir: release-artifacts/dist/
 
@@ -106,15 +107,16 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.release_tag }}
           fetch-depth: 1
-      - uses: actions/setup-python@v5
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.13'
       - name: Download original build artifacts and checksums
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: release-dists-${{ inputs.release_tag }}
           path: release-artifacts
@@ -138,7 +140,7 @@ jobs:
       contents: write
     steps:
       - name: Download original build artifacts and checksums
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: release-dists-${{ inputs.release_tag }}
           path: release-artifacts
