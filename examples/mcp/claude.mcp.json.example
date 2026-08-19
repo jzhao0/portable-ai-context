@@ -3,7 +3,7 @@
     "paic": {
       "type": "stdio",
       "command": "paic",
-      "args": ["mcp", "--root", "/ABSOLUTE/PATH/TO/WORKSPACE"]
+      "args": ["mcp", "--root", "${PAIC_MCP_ROOT}"]
     }
   }
 }
