@@ -15,6 +15,7 @@ from .compiler import (
     DEFAULT_GEMINI_MAX_OUTPUT_TOKENS,
     DEFAULT_OLLAMA_NUM_PREDICT,
     BackendConfig,
+    ProviderNativeTokenCounter,
     TiktokenTokenCounter,
     compile_migration,
     create_backend,
@@ -55,9 +56,12 @@ def _positive_float(value: str) -> float:
     return parsed
 
 
-def _compile_token_counter(args):
+def _compile_token_counter(args, backend):
+    has_tiktoken_options = (
+        args.tokenizer_model is not None or args.tiktoken_encoding is not None
+    )
     if args.token_counter == "character":
-        if args.tokenizer_model is not None or args.tiktoken_encoding is not None:
+        if has_tiktoken_options:
             raise PortableAIContextError(
                 "tiktoken tokenizer options require --token-counter tiktoken"
             )
@@ -69,6 +73,15 @@ def _compile_token_counter(args):
         return TiktokenTokenCounter(
             encoding_name=args.tiktoken_encoding,
             model=model,
+        )
+    if args.token_counter == "provider-native":
+        if has_tiktoken_options:
+            raise PortableAIContextError(
+                "tiktoken tokenizer options require --token-counter tiktoken"
+            )
+        return ProviderNativeTokenCounter(
+            backend=backend,
+            model=args.final_model,
         )
     raise PortableAIContextError("unknown token counter")
 
@@ -200,7 +213,7 @@ def cmd_compile(args) -> int:
             },
         ),
     )
-    token_counter = _compile_token_counter(args)
+    token_counter = _compile_token_counter(args, backend)
     out = Path(args.output)
     out.mkdir(parents=True, exist_ok=True)
     result = compile_migration(
@@ -364,9 +377,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     compile_p.add_argument(
         "--token-counter",
-        choices=["character", "tiktoken"],
+        choices=["character", "tiktoken", "provider-native"],
         default="character",
-        help="final/source token counter (default: dependency-free character estimate)",
+        help=(
+            "final/source token counter: offline character estimate, optional local tiktoken, "
+            "or opt-in Anthropic/Gemini provider-native input counting"
+        ),
     )
     compile_p.add_argument(
         "--tokenizer-model",
