@@ -71,8 +71,9 @@ def _validate_tag(tag: str, expected_version: str) -> str:
 
 def _validate_changelog(version: str, mode: str) -> None:
     text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    heading_re = re.compile(rf"^##\s+{re.escape(version)}(?:\s|$)")
     headings = [line.strip() for line in text.splitlines() if line.startswith("## ")]
-    matching = [line for line in headings if line.startswith(f"## {version}")]
+    matching = [line for line in headings if heading_re.match(line)]
     if len(matching) != 1:
         raise ReleaseGuardError(f"CHANGELOG must contain exactly one heading for {version}")
     if mode == "publish" and "unreleased" in matching[0].casefold():
