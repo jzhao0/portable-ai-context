@@ -12,6 +12,11 @@ import tomllib
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def _run_json(command: list[str], *, check: bool = True) -> tuple[subprocess.CompletedProcess[str], dict]:
+    run = subprocess.run(command, check=check, capture_output=True, text=True)
+    return run, json.loads(run.stdout)
+
+
 def main() -> int:
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
     expected_version = project["version"]
@@ -76,33 +81,41 @@ def main() -> int:
             + "\n",
             encoding="utf-8",
         )
-        inspect_run = subprocess.run(
-            [str(paic), "inspect", str(fixture)],
+
+        _, inspect_report = _run_json([str(paic), "inspect", str(fixture)])
+        conform_run, conform_report = _run_json(
+            [str(paic), "conform", str(fixture)], check=False
+        )
+        if conform_run.returncode != 0:
+            raise SystemExit("installed-wheel conform smoke returned nonzero")
+
+        bundle = root / "package-smoke.aicb"
+        subprocess.run(
+            [str(paic), "bundle", str(fixture), "-o", str(bundle)],
             check=True,
             capture_output=True,
             text=True,
         )
-        inspect_report = json.loads(inspect_run.stdout)
+        if not bundle.is_file():
+            raise SystemExit("installed-wheel bundle smoke did not create an .aicb file")
 
-        conform_run = subprocess.run(
-            [str(paic), "conform", str(fixture)],
-            check=False,
-            capture_output=True,
-            text=True,
+        _, bundle_inspect_report = _run_json([str(paic), "inspect", str(bundle)])
+        _, bundle_verify_report = _run_json([str(paic), "verify", str(bundle)])
+        bundle_conform_run, bundle_conform_report = _run_json(
+            [str(paic), "conform", str(bundle)], check=False
         )
-        if conform_run.returncode != 0:
-            raise SystemExit("installed-wheel conform smoke returned nonzero")
-        conform_report = json.loads(conform_run.stdout)
+        if bundle_conform_run.returncode != 0:
+            raise SystemExit("installed-wheel bundle conform smoke returned nonzero")
 
         checkpoint_dir = root / "checkpoint-output"
         checkpoint_run = subprocess.run(
-            [str(paic), "checkpoint", str(fixture), "-o", str(checkpoint_dir)],
+            [str(paic), "checkpoint", str(bundle), "-o", str(checkpoint_dir)],
             check=False,
             capture_output=True,
             text=True,
         )
         if checkpoint_run.returncode != 0:
-            raise SystemExit("installed-wheel checkpoint smoke returned nonzero")
+            raise SystemExit("installed-wheel bundle checkpoint smoke returned nonzero")
         checkpoint_report_path = checkpoint_dir / "checkpoint-report.json"
         checkpoint_path = checkpoint_dir / "CHECKPOINT.md"
         if not checkpoint_report_path.is_file() or not checkpoint_path.is_file():
@@ -115,12 +128,22 @@ def main() -> int:
         raise SystemExit(f"installed-wheel conform smoke failed: {conform_report!r}")
     if conform_report.get("message_count") != 2:
         raise SystemExit("installed-wheel conform smoke returned wrong message count")
+
+    if bundle_inspect_report.get("source") != "aicb" or bundle_inspect_report.get("message_count") != 2:
+        raise SystemExit(f"installed-wheel AICB inspect smoke failed: {bundle_inspect_report!r}")
+    if bundle_verify_report.get("message_count") != 2:
+        raise SystemExit("installed-wheel AICB verify smoke returned wrong message count")
+    if not bundle_conform_report.get("ok") or bundle_conform_report.get("source_kind") != "aicb":
+        raise SystemExit(f"installed-wheel AICB conform smoke failed: {bundle_conform_report!r}")
+    if bundle_conform_report.get("message_count") != 2:
+        raise SystemExit("installed-wheel AICB conform smoke returned wrong message count")
+
     if checkpoint_report.get("policy") != "deterministic-extractive-v1":
         raise SystemExit("installed-wheel checkpoint smoke returned wrong policy")
     if checkpoint_report.get("profile") != "standard" or checkpoint_report.get("budget_tokens") != 16000:
         raise SystemExit("installed-wheel checkpoint smoke returned wrong default budget profile")
-    if checkpoint_report.get("source_kind") != "jsonl" or not checkpoint_report.get("budget_met"):
-        raise SystemExit("installed-wheel checkpoint smoke failed report validation")
+    if checkpoint_report.get("source_kind") != "aicb" or not checkpoint_report.get("budget_met"):
+        raise SystemExit("installed-wheel AICB checkpoint smoke failed report validation")
 
     print(
         json.dumps(
@@ -132,6 +155,8 @@ def main() -> int:
                 "source": inspect_report["source"],
                 "message_count": inspect_report["message_count"],
                 "conformance_ok": conform_report["ok"],
+                "aicb_source": bundle_inspect_report["source"],
+                "aicb_conformance_ok": bundle_conform_report["ok"],
                 "checkpoint_policy": checkpoint_report["policy"],
                 "checkpoint_budget_met": checkpoint_report["budget_met"],
             },
