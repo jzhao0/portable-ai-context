@@ -259,8 +259,11 @@ def main(argv: list[str] | None = None) -> int:
             output=Path(args.output),
             max_json_mb=args.max_json_mb,
         )
-    except (ProbeError, OSError, zipfile.BadZipFile) as exc:
+    except ProbeError as exc:
         print(f"error: {exc}", file=sys.stderr)
+        return 2
+    except (OSError, zipfile.BadZipFile) as exc:
+        print(f"error: local export read failed: {type(exc).__name__}", file=sys.stderr)
         return 2
     print(json.dumps(report, ensure_ascii=False, indent=2))
     return 0
