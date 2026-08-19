@@ -68,6 +68,17 @@ def main() -> int:
     if "checkpoint" not in help_run.stdout:
         raise SystemExit("paic --help did not expose the checkpoint command")
 
+    compile_help_run = subprocess.run(
+        [str(paic), "compile", "--help"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    if "--backend" not in compile_help_run.stdout:
+        raise SystemExit("installed-wheel compile help did not expose --backend")
+    if "openai-compatible" not in compile_help_run.stdout:
+        raise SystemExit("installed-wheel compile help did not expose the default backend")
+
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
         fixture = root / "package-smoke.jsonl"
@@ -152,6 +163,7 @@ def main() -> int:
                 "distribution_version": installed_version,
                 "package_version": portable_ai_context.__version__,
                 "cli_version": version_run.stdout.strip(),
+                "compiler_backend_selector": True,
                 "source": inspect_report["source"],
                 "message_count": inspect_report["message_count"],
                 "conformance_ok": conform_report["ok"],
