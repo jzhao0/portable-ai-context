@@ -17,10 +17,10 @@ The installed-wheel package smoke also verifies that `paic --version` matches th
 
 - **Real live smoke:** exercised against a real browser/provider page or a built distribution in an actual runtime.
 - **Cross-platform CI:** deterministic repository tests on GitHub-hosted Ubuntu, Windows, and macOS.
-- **Synthetic / mocked contract coverage:** parser/compiler behavior tested with deliberately artificial fixtures, fake backends/tokenizers, or mocked provider HTTP.
+- **Synthetic / mocked contract coverage:** parser/compiler behavior tested with deliberately artificial fixtures, fake backends/tokenizers, mocked provider HTTP, or an in-memory protocol client/server.
 - **Compatibility-only:** implemented from a documented/observed source shape but not yet validated against a deliberately non-sensitive real provider export.
 
-These labels are not interchangeable. Mocked provider HTTP proves PAIC request/response handling, not that a current paid provider account accepted a real request.
+These labels are not interchangeable. Mocked provider HTTP proves PAIC request/response handling, not that a current paid provider account accepted a real request. An in-memory MCP SDK smoke proves SDK schema/dispatch compatibility, not that a specific external MCP host has launched the server successfully.
 
 ## Capability ledger
 
@@ -35,6 +35,7 @@ These labels are not interchangeable. Mocked provider HTTP proves PAIC request/r
 | Claude local conversation JSON adapter | **Synthetic conformance** + cross-platform CI | Supported alpha subset. Deliberately non-sensitive real export validation is still open in Issue #17 / volunteer Issue #22. No authenticated scraping/page adapter. |
 | Gemini Apps My Activity JSON adapter | **Synthetic conformance** + cross-platform CI | Supported flat activity-stream subset. Deliberately non-sensitive real Takeout validation is still open in Issue #17 / volunteer Issue #24. Original chat-thread reconstruction is not claimed. |
 | Shared adapter conformance gate | Cross-platform CI + installed-wheel `paic conform` smoke | Implemented. Verifies canonical structure, integrity consistency, and clean HTML/TXT/JSONL round-trip behavior without printing conversation text; does not replace real provider-source validation. |
+| Root-confined stdio MCP server alpha | Cross-platform root-policy/unit tests + official Python MCP SDK v2 `Client(server)` installed-wheel in-memory smoke (PR #47 CI #102) | Optional `portable-ai-context[mcp]`; base wheel remains MCP-free. `paic mcp --root <workspace>` explicitly uses stdio, exposes exactly `inspect_source`, `conform_source`, `build_checkpoint`, and `build_redaction_review`, exposes no resources, confines sources to root-relative allowed local PAIC files, and writes only fresh server-owned artifacts under `.paic-mcp/`. MCP Roots are not used as authorization. No host-specific Claude Code/Codex/Cursor live integration or remote MCP deployment is claimed. |
 | Token-aware migration budgets and Lite/Standard/Full profiles | Deterministic fake exact-tokenizer/backend tests + cross-platform CI | Compiler accepts injectable counters. Dependency-free CLI defaults to the character estimate. |
 | Optional local tiktoken raw-text counter | Deterministic lazy-import/model-resolution tests + package-job optional-extra smoke | Base wheel remains tokenizer-free. `portable-ai-context[tokenizers]` installs the reviewed tiktoken 0.13.x line. Exactness means exact plain-text tokenization under the resolved encoding, **not exact provider request/billing tokens**. PAIC delegates model mapping to tiktoken and does not guess unknown mappings. |
 | Compiler backend registry / construction seam | Cross-platform CI + installed-wheel `paic compile --help` surface | Implemented. Built-ins currently include `openai-compatible`, `anthropic`, `gemini`, and `ollama`; `compile_migration()` remains provider-agnostic. |
@@ -43,7 +44,7 @@ These labels are not interchangeable. Mocked provider HTTP proves PAIC request/r
 | Gemini `generateContent` compiler transport | **Mocked provider HTTP** + cross-platform CI (PR #36, final CI #81) + installed-wheel CLI surface | Implemented using the stateless REST completion contract. No live paid Gemini call is claimed. |
 | Native Ollama `/api/chat` compiler transport | **Mocked provider HTTP** + cross-platform CI (PR #38, final CI #90) + installed-wheel CLI surface | Implemented. Defaults to keyless `http://localhost:11434`, while explicit custom `--api-base` may access a remote host. CI does not install/start Ollama, pull a model, or run model compute; no real local-model smoke is claimed. |
 | Chromium browser capture extension | **Real live smoke** on Windows Edge using a deliberately public/non-sensitive two-message conversation; preview count/tail matched downloaded JSONL; `paic inspect`/`verify` reproduced the same canonical messages. | Edge real smoke verified. Chrome and Brave are first-target Chromium browsers but have not been separately live-smoke-tested. Firefox is feasibility-only. |
-| Wheel/sdist packaging | **Real CI distribution smoke**: build wheel + sdist, install only the wheel into an isolated venv, verify distribution/package/CLI version, source inspect/conform, `.aicb` roundtrip, deterministic checkpoint, pattern-limited `paic redact` fake-secret review, packaged compiler/token-counter CLI surfaces, then explicitly install/smoke the tokenizer extra | The base-wheel smoke verifies tiktoken is absent before the extra is installed. Redaction smoke verifies the synthetic secret is absent from stdout/report, supported-pattern rescan is zero, and manual review remains required. Latest redaction-enabled package evidence is PR #44 CI #97. Publication remains separate. |
+| Wheel/sdist packaging | **Real CI distribution smoke**: build wheel + sdist, install only the wheel into an isolated venv, verify distribution/package/CLI version, source inspect/conform, `.aicb` roundtrip, deterministic checkpoint, pattern-limited `paic redact` fake-secret review, packaged compiler/token-counter/MCP CLI surfaces, then explicitly install/smoke tokenizer and MCP extras from the same built wheel | The base-wheel smoke verifies both tiktoken and MCP are absent before optional extras are installed. Redaction smoke verifies the synthetic secret is absent from stdout/report, supported-pattern rescan is zero, and manual review remains required. The MCP extra smoke uses the official SDK in memory and starts no listener. Publication remains separate. |
 
 ## Recent implementation evidence anchors
 
@@ -57,11 +58,12 @@ The release candidate has continued to evolve after the older package baseline. 
 - Issue #37 / PR #38 — native Ollama backend and URL/key-isolation hardening; final CI #90 passed 10/10 jobs.
 - Issue #41 / PR #42 — optional tiktoken raw-text exact counter while preserving the zero-dependency base install; final CI #95 passed 10/10 jobs.
 - Issue #43 / PR #44 — pattern-limited explicit body-secret redaction review sharing one redaction primitive with deterministic checkpoint generation; final CI #97 passed 10/10 jobs.
+- Issue #46 / PR #47 — stdio-only root-confined MCP server alpha; official SDK installed-wheel in-memory behavior passed CI #102. Final merge-gate evidence is recorded only after the final PR head is tested.
 
-The latest merged `main` implementation anchor is:
+The merged `main` anchor used as the base of the Issue #46 implementation branch is:
 
 ```text
-d1b3229b49a606b7cb093128230ea19190d12a08
+7b9d040cb379c076550c33c5b55305de426fd4cf
 ```
 
 Commit identifiers are implementation anchors, not release tags.
@@ -102,9 +104,10 @@ Before calling `0.1.0a2` published:
 4. publication must use a tagged commit and produce matching wheel/sdist checksums (#18);
 5. a fresh install of the **published** artifact must pass `paic --version` and a local inspect smoke;
 6. no release note may describe `.aicb` digests as signing/authenticity evidence;
-7. no mocked/synthetic provider result may be relabeled as a live provider validation;
+7. no mocked/synthetic/provider-in-memory result may be relabeled as a live provider/host validation;
 8. optional tokenizer support must not make tiktoken an unconditional base dependency or be described as exact whole-request billing tokenization;
-9. a redaction report with zero remaining **supported** patterns must never be described as proof that the artifact is generally safe to share; manual review remains required.
+9. a redaction report with zero remaining **supported** patterns must never be described as proof that the artifact is generally safe to share; manual review remains required;
+10. optional MCP support must not make the MCP SDK an unconditional base dependency, and in-memory SDK evidence must not be described as a host-specific Claude Code/Codex/Cursor live smoke or remote-service deployment.
 
 ## Known alpha limitations
 
@@ -123,6 +126,10 @@ Before calling `0.1.0a2` published:
 - Anthropic, Gemini, and Ollama compiler transports have deterministic/mocked contract coverage, not live provider/model execution evidence in this ledger.
 - The Ollama backend is local only by default; a caller-selected remote `--api-base` can cause network access.
 - No real Ollama daemon/model smoke is recorded here.
+- MCP transport is stdio-only in this alpha; no Streamable HTTP/SSE listener or remote authentication system is provided.
+- MCP Roots are not an authorization boundary in PAIC. The launch-time `--root` and PAIC's own resolved-path confinement are the security boundary.
+- The MCP alpha exposes no arbitrary file/resource read, no compile/provider/network tool, and no arbitrary output path. Generated checkpoint/redaction content remains on disk under server-owned `.paic-mcp/` directories rather than being returned as raw MCP resource text.
+- No host-specific Claude Code/Codex/Cursor live MCP integration smoke is recorded yet; CI uses the official SDK's in-memory `Client(server)` path.
 - `0.1.0a2` remains unpublished until Issue #18 is completed.
 
-The release ledger should be updated whenever an evidence class changes. A synthetic or mocked test must never be silently relabeled as real provider validation.
+The release ledger should be updated whenever an evidence class changes. A synthetic, mocked, or in-memory test must never be silently relabeled as real provider/host validation.

@@ -24,6 +24,7 @@ dependencies = []
 
 [project.optional-dependencies]
 tokenizers = ["tiktoken>=0.13,<0.14"]
+mcp = ["mcp>=2.0,<3"]
 
 [project.scripts]
 paic = "portable_ai_context.cli:main"

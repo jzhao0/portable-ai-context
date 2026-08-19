@@ -37,6 +37,8 @@ def main() -> int:
 
     if importlib.util.find_spec("tiktoken") is not None:
         raise SystemExit("base wheel unexpectedly installed the optional tiktoken dependency")
+    if importlib.util.find_spec("mcp") is not None:
+        raise SystemExit("base wheel unexpectedly installed the optional MCP dependency")
 
     package_path = Path(portable_ai_context.__file__).resolve()
     if "site-packages" not in package_path.parts:
@@ -65,11 +67,20 @@ def main() -> int:
         capture_output=True,
         text=True,
     )
-    for command in ("conform", "checkpoint", "redact"):
+    for command in ("conform", "checkpoint", "redact", "mcp"):
         if command not in help_run.stdout:
             raise SystemExit(f"paic --help did not expose the {command} command")
     if "Portable AI Context" not in help_run.stdout:
         raise SystemExit("paic --help did not expose the expected CLI")
+
+    mcp_help_run = subprocess.run(
+        [str(paic), "mcp", "--help"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    if "--root" not in mcp_help_run.stdout:
+        raise SystemExit("installed-wheel MCP help did not expose the explicit --root boundary")
 
     compile_help_run = subprocess.run(
         [str(paic), "compile", "--help"],
@@ -234,6 +245,8 @@ def main() -> int:
                 "package_version": portable_ai_context.__version__,
                 "cli_version": version_run.stdout.strip(),
                 "base_wheel_tiktoken_installed": False,
+                "base_wheel_mcp_installed": False,
+                "mcp_cli_surface": True,
                 "compiler_backend_selector": True,
                 "anthropic_backend_surface": True,
                 "gemini_backend_surface": True,
