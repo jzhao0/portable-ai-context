@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+import re
 from typing import Any, Iterable, Sequence
 
 from .adapters import clean_html as clean_html_adapter
@@ -15,6 +16,7 @@ from .utils import normalize_text
 
 
 CANONICAL_ROLES = frozenset({"user", "assistant"})
+SOURCE_KIND_RE = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
 
 
 @dataclass(slots=True, frozen=True)
@@ -114,6 +116,9 @@ def inspect_conformance(
 
     messages = conversation.messages
     integrity = inspect_integrity(conversation)
+    raw_source_kind = conversation.source.kind if isinstance(conversation.source.kind, str) else ""
+    source_kind_present = bool(raw_source_kind.strip())
+    source_kind_identifier = bool(SOURCE_KIND_RE.fullmatch(raw_source_kind))
 
     record(
         "message_stream_nonempty",
@@ -123,9 +128,15 @@ def inspect_conformance(
     )
     record(
         "source_kind_present",
-        isinstance(conversation.source.kind, str) and bool(conversation.source.kind.strip()),
+        source_kind_present,
         "missing_source_kind",
         "canonical source kind is missing",
+    )
+    record(
+        "source_kind_identifier",
+        source_kind_identifier,
+        "invalid_source_kind",
+        "canonical source kind is not a safe identifier",
     )
     record(
         "canonical_roles",
@@ -194,9 +205,10 @@ def inspect_conformance(
             f"{format_name} round trip did not preserve the canonical conversation digest",
         )
 
+    safe_source_kind = raw_source_kind if source_kind_identifier else ("" if not source_kind_present else "<invalid>")
     return ConformanceReport(
         ok=not violations,
-        source_kind=conversation.source.kind if isinstance(conversation.source.kind, str) else "",
+        source_kind=safe_source_kind,
         message_count=len(messages),
         conversation_digest=integrity.conversation_digest,
         checks=checks,
