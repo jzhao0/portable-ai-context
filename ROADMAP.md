@@ -25,7 +25,7 @@
 - [ ] Claude shared/page adapter
 - [ ] Gemini page/thread adapter when a reliable source contract exists
 - [ ] DeepSeek chat adapter (#58)
-- [ ] Grok adapter
+- [ ] Grok adapter (#66)
 - [x] Minimal generic browser DOM capture contract (`role_attribute_v1`)
 - [x] Shared adapter conformance harness + content-free `paic conform` (#25)
 
