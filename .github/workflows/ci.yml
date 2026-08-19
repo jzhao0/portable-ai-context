@@ -38,5 +38,21 @@ jobs:
         run: .package-smoke-venv/bin/python -m pip install dist/*.whl
       - name: Smoke installed distribution
         run: .package-smoke-venv/bin/python tools/package_smoke.py
+      - name: Install optional tokenizer extra from built wheel
+        run: |
+          .package-smoke-venv/bin/python - <<'PY'
+          from pathlib import Path
+          import subprocess
+          import sys
+
+          wheels = list(Path("dist").glob("*.whl"))
+          if len(wheels) != 1:
+              raise SystemExit(f"expected exactly one wheel, found {len(wheels)}")
+          subprocess.check_call(
+              [sys.executable, "-m", "pip", "install", f"{wheels[0]}[tokenizers]"]
+          )
+          PY
+      - name: Smoke optional tokenizer extra
+        run: .package-smoke-venv/bin/python tools/tokenizer_smoke.py
       - name: Require wheel and sdist artifacts
         run: test -n "$(find dist -maxdepth 1 -name '*.whl' -print -quit)" && test -n "$(find dist -maxdepth 1 -name '*.tar.gz' -print -quit)"
