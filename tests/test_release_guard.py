@@ -8,6 +8,15 @@ from tools import release_guard
 
 
 class ReleaseGuardTests(unittest.TestCase):
+    def test_current_repository_version_sources_agree(self):
+        self.assertEqual(release_guard._project_version(), "0.1.0a2")
+        self.assertEqual(release_guard._package_version(), "0.1.0a2")
+        with mock.patch.object(release_guard, "_validate_tag", return_value="tagged-main-sha"):
+            report = release_guard.validate_release(tag="v0.1.0a2", mode="dry-run")
+        self.assertTrue(report["ok"])
+        self.assertEqual(report["version"], "0.1.0a2")
+        self.assertEqual(report["commit"], "tagged-main-sha")
+
     def test_alpha_tag_must_match_project_version(self):
         with mock.patch.object(release_guard, "_git", return_value="abc123"):
             self.assertEqual(
