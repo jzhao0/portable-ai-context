@@ -84,7 +84,7 @@ Both machines captured the same private/reference share without publishing its U
 The deliberately public/non-sensitive two-message smoke artifact produced:
 
 - adapter: `role_attribute_v1`
-- messages: `2` (`1` user, `1` assistant`)
+- messages: `2` (`1` user, `1` assistant)
 - ignored role nodes: `0`
 - empty role nodes: `0`
 - downloaded JSONL SHA256: `9ccfd76270638dc7496aec6945cfb697fffd074c97c0faf3223c88c05d8206ed`
