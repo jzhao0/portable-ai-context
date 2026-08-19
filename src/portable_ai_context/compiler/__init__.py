@@ -10,6 +10,7 @@ from .budget import (
     CallableTokenCounter,
     CompilationReport,
     PROFILE_BUDGETS,
+    ProviderNativeTokenCounter,
     TiktokenTokenCounter,
     TokenCounter,
 )
@@ -44,6 +45,7 @@ __all__ = [
     "TokenCounter",
     "CharacterTokenCounter",
     "CallableTokenCounter",
+    "ProviderNativeTokenCounter",
     "TiktokenTokenCounter",
     "PROFILE_BUDGETS",
     "OpenAICompatibleBackend",

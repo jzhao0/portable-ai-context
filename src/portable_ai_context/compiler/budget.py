@@ -16,6 +16,8 @@ PROFILE_BUDGETS = {
 }
 
 _SAFE_TIKTOKEN_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+_SAFE_PROVIDER_MODEL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$")
+_SUPPORTED_NATIVE_COUNTER_PROVIDERS = frozenset({"anthropic", "gemini"})
 
 
 class TokenCounter(Protocol):
@@ -55,6 +57,51 @@ class CallableTokenCounter:
         value = int(self.fn(text))
         if value < 0:
             raise ValueError("token counter returned a negative value")
+        return value
+
+
+@dataclass(slots=True)
+class ProviderNativeTokenCounter:
+    """Network counter backed by a compiler provider's count-only endpoint.
+
+    The semantic unit is intentionally narrow: ``text`` is counted as one
+    user-role provider input for ``model``. This is not a local/raw-text
+    tokenizer abstraction and does not imply billing/output/tool/media counts.
+    """
+
+    backend: Any = field(repr=False)
+    model: str
+    name: str = field(init=False)
+    exact: bool = field(init=False)
+
+    def __post_init__(self) -> None:
+        provider = getattr(self.backend, "token_counter_provider", None)
+        exact = getattr(self.backend, "token_counter_exact", None)
+        count_input_tokens = getattr(self.backend, "count_input_tokens", None)
+
+        if provider not in _SUPPORTED_NATIVE_COUNTER_PROVIDERS:
+            raise CompilerError(
+                "provider-native token counter requires an Anthropic or Gemini backend"
+            )
+        if not isinstance(exact, bool) or not callable(count_input_tokens):
+            raise CompilerError("compiler backend does not expose a valid native token counter")
+        if (
+            not isinstance(self.model, str)
+            or not _SAFE_PROVIDER_MODEL_RE.fullmatch(self.model)
+            or ".." in self.model
+            or "//" in self.model
+        ):
+            raise CompilerError("provider-native token-counter model identifier is invalid")
+
+        self.name = f"{provider}_count_tokens:{self.model}"
+        self.exact = exact
+
+    def count(self, text: str) -> int:
+        if not isinstance(text, str):
+            raise TypeError("token counter input must be text")
+        value = self.backend.count_input_tokens(model=self.model, text=text)
+        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+            raise CompilerError("provider-native token counter returned an invalid count")
         return value
 
 

@@ -42,6 +42,9 @@ _NON_TEXT_OR_INCOMPLETE_FINISH_REASONS = frozenset(
 class GeminiBackend:
     """Minimal non-streaming Gemini generateContent compiler backend."""
 
+    token_counter_provider = "gemini"
+    token_counter_exact = True
+
     def __init__(
         self,
         *,
@@ -67,6 +70,55 @@ class GeminiBackend:
     def _generate_url(self, model: str) -> str:
         model_path = self._normalize_model_path(model)
         return f"{self.api_base}/{model_path}:generateContent"
+
+    def _count_tokens_url(self, model: str) -> str:
+        model_path = self._normalize_model_path(model)
+        return f"{self.api_base}/{model_path}:countTokens"
+
+    def count_input_tokens(self, *, model: str, text: str) -> int:
+        """Count one user-role text input with Gemini's countTokens method."""
+        if not isinstance(text, str):
+            raise TypeError("token counter input must be text")
+
+        payload = {
+            "contents": [
+                {
+                    "role": "user",
+                    "parts": [{"text": text}],
+                }
+            ],
+        }
+        request = urllib.request.Request(
+            self._count_tokens_url(model),
+            data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "x-goog-api-key": self.api_key,
+            },
+            method="POST",
+        )
+
+        try:
+            with urllib.request.urlopen(request, timeout=self.timeout) as response:
+                raw = response.read()
+        except urllib.error.HTTPError as exc:
+            raise CompilerError(f"gemini token counter HTTP status {exc.code}") from exc
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            raise CompilerError("gemini token counter transport failed") from exc
+        except Exception as exc:
+            raise CompilerError("gemini token counter request failed") from exc
+
+        try:
+            data = json.loads(raw.decode("utf-8", errors="strict"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise CompilerError("gemini token counter returned invalid JSON") from exc
+
+        if not isinstance(data, dict):
+            raise CompilerError("unexpected Gemini token-count response shape")
+        value = data.get("totalTokens")
+        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+            raise CompilerError("unexpected Gemini token-count response shape")
+        return value
 
     def complete(self, *, model: str, system: str, user: str, stage: str) -> str:
         payload = {

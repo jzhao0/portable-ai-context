@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import urllib.error
 import urllib.request
 
@@ -10,6 +11,7 @@ from portable_ai_context.errors import CompilerError
 ANTHROPIC_API_VERSION = "2023-06-01"
 DEFAULT_ANTHROPIC_API_BASE = "https://api.anthropic.com"
 DEFAULT_ANTHROPIC_MAX_TOKENS = 4096
+_TOKEN_COUNT_MODEL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 _SUCCESS_STOP_REASONS = frozenset({"end_turn", "stop_sequence"})
 _INCOMPLETE_STOP_ERRORS = {
@@ -23,6 +25,9 @@ _INCOMPLETE_STOP_ERRORS = {
 
 class AnthropicBackend:
     """Minimal non-streaming Anthropic Messages API compiler backend."""
+
+    token_counter_provider = "anthropic"
+    token_counter_exact = False
 
     def __init__(
         self,
@@ -43,6 +48,59 @@ class AnthropicBackend:
         if self.api_base.endswith("/v1"):
             return self.api_base + "/messages"
         return self.api_base + "/v1/messages"
+
+    def _count_tokens_url(self) -> str:
+        if self.api_base.endswith("/v1"):
+            return self.api_base + "/messages/count_tokens"
+        return self.api_base + "/v1/messages/count_tokens"
+
+    def count_input_tokens(self, *, model: str, text: str) -> int:
+        """Count one user-role text input with Anthropic's Token Count API.
+
+        Anthropic documents this count as an estimate, so callers must not
+        promote it to an exact raw-text tokenizer count.
+        """
+        if not isinstance(model, str) or not _TOKEN_COUNT_MODEL_RE.fullmatch(model):
+            raise CompilerError("anthropic token-counter model identifier is invalid")
+        if not isinstance(text, str):
+            raise TypeError("token counter input must be text")
+
+        payload = {
+            "model": model,
+            "messages": [{"role": "user", "content": text}],
+        }
+        request = urllib.request.Request(
+            self._count_tokens_url(),
+            data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "X-Api-Key": self.api_key,
+                "anthropic-version": self.api_version,
+            },
+            method="POST",
+        )
+
+        try:
+            with urllib.request.urlopen(request, timeout=self.timeout) as response:
+                raw = response.read()
+        except urllib.error.HTTPError as exc:
+            raise CompilerError(f"anthropic token counter HTTP status {exc.code}") from exc
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            raise CompilerError("anthropic token counter transport failed") from exc
+        except Exception as exc:
+            raise CompilerError("anthropic token counter request failed") from exc
+
+        try:
+            data = json.loads(raw.decode("utf-8", errors="strict"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise CompilerError("anthropic token counter returned invalid JSON") from exc
+
+        if not isinstance(data, dict):
+            raise CompilerError("unexpected Anthropic token-count response shape")
+        value = data.get("input_tokens")
+        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+            raise CompilerError("unexpected Anthropic token-count response shape")
+        return value
 
     def complete(self, *, model: str, system: str, user: str, stage: str) -> str:
         payload = {
