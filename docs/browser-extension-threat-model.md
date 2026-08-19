@@ -23,7 +23,7 @@ Packaged extension code is trusted to implement the capture allowlist. The MVP r
 
 ### Web page / conversation DOM
 
-The page is untrusted. A page can alter its DOM, imitate expected role attributes, inject adversarial transcript text, or attempt to exhaust extension resources. DOM presence is therefore evidence of what was rendered, not cryptographic proof that a platform authored the content.
+The page is untrusted. A page can alter its DOM, imitate expected role attributes, inject adversarial transcript text, virtualize/unload earlier messages, or attempt to exhaust extension resources. DOM presence is therefore evidence of what was rendered at capture time, not cryptographic proof that a platform authored the content or that the full history was present.
 
 ### Captured transcript text
 
@@ -53,11 +53,28 @@ The core migration compiler separately instructs model backends to treat old con
 
 ### Malicious or drifting DOM
 
-**Threat:** a page may imitate role attributes or platform DOM changes may cause incomplete capture.
+**Threat:** a page may imitate role attributes or platform DOM changes may cause incorrect capture.
 
-**Mitigation:** unsupported roles are ignored; absence of the narrow selector is a hard failure rather than a fallback to broad scraping. The popup reports canonical message count, ignored/empty role-node counts, and last user/assistant previews before download. Users should compare these tail previews with the visible conversation.
+**Mitigation:** unsupported roles are ignored; absence of the narrow selector is a hard failure rather than a fallback to broad scraping. The popup reports canonical message count, ignored/empty role-node counts, beginning/tail previews, first/last roles, and same-role transition count before download.
 
 The extension does not claim source authenticity. Integrity hashes generated later by `paic` prove artifact consistency, not that the webpage itself was honest.
+
+### Virtualized or incomplete conversation DOM
+
+**Threat:** a chat frontend may lazy-load, virtualize, or unload older messages. The currently rendered DOM can therefore contain a coherent-looking suffix of a conversation while omitting earlier history.
+
+**Mitigation:** the extension does not expose a `complete=true` signal and does not infer completeness from alternating roles or a clean tail. The popup permanently reports `DOM completeness: not proven` and surfaces manual review signals:
+
+- message count;
+- first/last captured roles;
+- consecutive same-role transition count;
+- ignored/empty role-node counts;
+- first user/assistant previews;
+- last user/assistant previews.
+
+The user is instructed to scroll through the full thread, reopen the popup, run **Inspect conversation** again, and compare the count plus beginning/tail previews before download. These review signals can reveal likely truncation or DOM drift, but a zero-warning result still does not prove completeness.
+
+The extension intentionally does not auto-scroll, click provider UI, persist prior captures, or broaden permissions merely to try to force history loading. Provider-specific completeness mechanisms require a separate reviewed contract.
 
 ### Prompt injection in transcript text
 
@@ -100,7 +117,8 @@ The extension does not claim source authenticity. Integrity hashes generated lat
 - A compromised browser or maliciously modified extension package can bypass these guarantees.
 - The DOM adapter can become stale as platform markup changes.
 - The extension cannot prove that displayed page content came from the claimed AI provider.
+- The extension cannot prove that a virtualized page exposed the full conversation history.
 - The extension does not redact secrets typed into actual conversation text.
 - Attachments, images, audio, canvases, hidden reasoning, tool calls, and platform runtime metadata are intentionally excluded from this MVP.
 
-These constraints favor conservative failure over broad capture.
+These constraints favor conservative failure and explicit uncertainty over broad capture or false completeness claims.
