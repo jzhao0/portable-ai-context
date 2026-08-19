@@ -27,20 +27,21 @@ class MCPWorkspaceTests(unittest.TestCase):
 
             self.assertEqual(resolved, source.resolve())
 
-    def test_public_source_suffix_contract_is_narrow(self):
+    def test_public_source_suffix_contract_matches_local_registry(self):
         self.assertEqual(
             MCP_ALLOWED_SOURCE_SUFFIXES,
-            frozenset({".aicb", ".jsonl", ".json", ".txt", ".html"}),
+            frozenset({".aicb", ".jsonl", ".ndjson", ".json", ".txt", ".html", ".htm"}),
         )
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
-            (root / "legacy.ndjson").write_text('{"role":"user","text":"hi"}\n', encoding="utf-8")
-            (root / "legacy.htm").write_text("<html></html>", encoding="utf-8")
+            ndjson = root / "conversation.ndjson"
+            htm = root / "conversation.htm"
+            ndjson.write_text('{"role":"user","text":"hi"}\n', encoding="utf-8")
+            htm.write_text("<html></html>", encoding="utf-8")
             workspace = MCPWorkspace.from_root(root)
-            for value in ("legacy.ndjson", "legacy.htm"):
-                with self.subTest(value=value):
-                    with self.assertRaisesRegex(MCPWorkspaceError, "source type is not supported"):
-                        workspace.resolve_source(value)
+
+            self.assertEqual(workspace.resolve_source("conversation.ndjson"), ndjson.resolve())
+            self.assertEqual(workspace.resolve_source("conversation.htm"), htm.resolve())
 
     def test_rejects_unsafe_relative_path_forms_without_echo(self):
         with tempfile.TemporaryDirectory() as td:
