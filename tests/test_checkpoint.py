@@ -37,9 +37,9 @@ def exact_characters():
     )
 
 
-def long_state_conversation() -> Conversation:
+def long_state_conversation(message_count: int = 80) -> Conversation:
     messages = []
-    for index in range(20):
+    for index in range(message_count):
         role = "user" if index % 2 == 0 else "assistant"
         text = f"neutral historical message {index} " + "context " * 18
         if index == 0:
@@ -49,9 +49,9 @@ def long_state_conversation() -> Conversation:
                 "下一步必须继续处理这个未完成问题，当前阻塞等待验证，版本提交确认后再继续。 "
                 + "state " * 12
             )
-        if index == 18:
+        if index == message_count - 2:
             text = "Latest user request: continue the current checkpoint implementation. " + "recent " * 15
-        if index == 19:
+        if index == message_count - 1:
             text = "Latest assistant status: implementation is pending final tests. " + "recent " * 15
         messages.append(Message(role=role, text=text, index=index))
     return Conversation(
