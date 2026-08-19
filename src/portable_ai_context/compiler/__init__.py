@@ -17,6 +17,11 @@ from .gemini import (
     DEFAULT_GEMINI_MAX_OUTPUT_TOKENS,
     GeminiBackend,
 )
+from .ollama import (
+    DEFAULT_OLLAMA_API_BASE,
+    DEFAULT_OLLAMA_NUM_PREDICT,
+    OllamaBackend,
+)
 from .pipeline import CompilationResult, compile_migration
 from .openai_compatible import OpenAICompatibleBackend
 from .registry import (
@@ -47,4 +52,7 @@ __all__ = [
     "GeminiBackend",
     "DEFAULT_GEMINI_API_BASE",
     "DEFAULT_GEMINI_MAX_OUTPUT_TOKENS",
+    "OllamaBackend",
+    "DEFAULT_OLLAMA_API_BASE",
+    "DEFAULT_OLLAMA_NUM_PREDICT",
 ]
