@@ -58,7 +58,9 @@ Download it only to your own computer and run the probe locally.
 
 The probe makes no assumptions about xAI field names such as `messages`, `conversation`, `role`, or `content`.
 
-It scans local JSON, JSONL, and NDJSON documents for the two fixed sentinels, then selects the deepest/minimal JSON object or array whose subtree contains both markers.
+It scans local JSON, JSONL, and NDJSON documents for the two fixed sentinels. It first finds the deepest/minimal JSON object or array whose subtree contains both markers. If that minimal container is an array stored directly under an object key, the probe deliberately preserves exactly one parent object so the sanitized specimen retains the field label for that ordered array. A dict candidate is not expanded because it already exposes its own field names; a root array remains an array.
+
+This one-level field context makes the specimen more useful for discovering a real schema without broadening it to unrelated account-level data. The resulting context is still subject to the same strict structural node limit and value redaction.
 
 ### Windows PowerShell
 
@@ -113,7 +115,7 @@ Exact counts/hash/size depend on the current xAI export, but stdout has this sha
 {
   "ok": true,
   "provider": "grok",
-  "probe_mode": "unknown_schema_minimal_common_container_v1",
+  "probe_mode": "unknown_schema_minimal_common_context_v1",
   "json_documents_scanned": 1,
   "jsonl_records_scanned": 0,
   "html_documents_seen": 0,
