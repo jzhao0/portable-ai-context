@@ -12,6 +12,11 @@ from .budget import (
     PROFILE_BUDGETS,
     TokenCounter,
 )
+from .gemini import (
+    DEFAULT_GEMINI_API_BASE,
+    DEFAULT_GEMINI_MAX_OUTPUT_TOKENS,
+    GeminiBackend,
+)
 from .pipeline import CompilationResult, compile_migration
 from .openai_compatible import OpenAICompatibleBackend
 from .registry import (
@@ -39,4 +44,7 @@ __all__ = [
     "ANTHROPIC_API_VERSION",
     "DEFAULT_ANTHROPIC_API_BASE",
     "DEFAULT_ANTHROPIC_MAX_TOKENS",
+    "GeminiBackend",
+    "DEFAULT_GEMINI_API_BASE",
+    "DEFAULT_GEMINI_MAX_OUTPUT_TOKENS",
 ]
