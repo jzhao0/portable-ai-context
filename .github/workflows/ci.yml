@@ -56,5 +56,23 @@ jobs:
           PY
       - name: Smoke optional tokenizer extra
         run: .package-smoke-venv/bin/python tools/tokenizer_smoke.py
+      - name: Install optional MCP extra from built wheel
+        run: |
+          .package-smoke-venv/bin/python - <<'PY'
+          from pathlib import Path
+          import subprocess
+          import sys
+
+          wheels = list(Path("dist").glob("*.whl"))
+          if len(wheels) != 1:
+              raise SystemExit(f"expected exactly one wheel, found {len(wheels)}")
+          wheel_uri = wheels[0].resolve().as_uri()
+          requirement = f"portable-ai-context[mcp] @ {wheel_uri}"
+          subprocess.check_call(
+              [sys.executable, "-m", "pip", "install", requirement]
+          )
+          PY
+      - name: Smoke optional MCP extra with official in-memory client
+        run: .package-smoke-venv/bin/python tools/mcp_smoke.py
       - name: Require wheel and sdist artifacts
         run: test -n "$(find dist -maxdepth 1 -name '*.whl' -print -quit)" && test -n "$(find dist -maxdepth 1 -name '*.tar.gz' -print -quit)"
