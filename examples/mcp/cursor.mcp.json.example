@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "paic": {
+      "type": "stdio",
+      "command": "paic",
+      "args": ["mcp", "--root", "${workspaceFolder}"]
+    }
+  }
+}
