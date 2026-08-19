@@ -1,0 +1,152 @@
+name: Release alpha
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing alpha tag to build, for example v0.1.0a2
+        required: true
+        type: string
+      mode:
+        description: dry-run builds/verifies only; publish enables PyPI + GitHub Release jobs
+        required: true
+        default: dry-run
+        type: choice
+        options:
+          - dry-run
+          - publish
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.release_tag }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build tagged distributions
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.guard.outputs.version }}
+      commit: ${{ steps.guard.outputs.commit }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_tag }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Validate tag and release metadata
+        id: guard
+        run: >-
+          python tools/release_guard.py
+          --tag "${{ inputs.release_tag }}"
+          --mode "${{ inputs.mode }}"
+          --github-output "$GITHUB_OUTPUT"
+      - name: Install build validation tooling
+        run: python -m pip install --upgrade pip build twine
+      - name: Build wheel and sdist from tagged commit
+        run: python -m build
+      - name: Validate distribution metadata
+        run: python -m twine check dist/*
+      - name: Validate exact artifact set and generate checksums
+        run: >-
+          python tools/release_guard.py
+          --tag "${{ inputs.release_tag }}"
+          --mode "${{ inputs.mode }}"
+          --artifacts-dir dist
+          --checksums SHA256SUMS
+      - name: Smoke built wheel in isolated environment
+        run: |
+          python -m venv .release-smoke-venv
+          .release-smoke-venv/bin/python -m pip install dist/*.whl
+          .release-smoke-venv/bin/python tools/package_smoke.py
+      - name: Upload verified release candidates
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-dists-${{ inputs.release_tag }}
+          path: |
+            dist/*
+            SHA256SUMS
+          if-no-files-found: error
+          retention-days: 14
+
+  pypi-publish:
+    name: Publish verified distributions to PyPI
+    if: ${{ inputs.mode == 'publish' }}
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/portable-ai-context/${{ needs.build.outputs.version }}/
+    permissions:
+      id-token: write
+    steps:
+      - name: Download build-job distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: release-dists-${{ inputs.release_tag }}
+          path: release-artifacts
+      - name: Publish with PyPI Trusted Publishing
+        uses: pypa/gh-action-pypi-publish@v1.14.2
+        with:
+          packages-dir: release-artifacts/dist/
+
+  verify-published:
+    name: Verify PyPI hashes and fresh install
+    if: ${{ inputs.mode == 'publish' }}
+    needs: [build, pypi-publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_tag }}
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Download original build artifacts and checksums
+        uses: actions/download-artifact@v4
+        with:
+          name: release-dists-${{ inputs.release_tag }}
+          path: release-artifacts
+      - name: Verify PyPI file hashes match tagged build
+        run: >-
+          python tools/verify_pypi_release.py
+          --version "${{ needs.build.outputs.version }}"
+          --checksums release-artifacts/SHA256SUMS
+      - name: Fresh install exact published version
+        run: |
+          python -m venv .published-smoke-venv
+          .published-smoke-venv/bin/python -m pip install --no-cache-dir "portable-ai-context==${{ needs.build.outputs.version }}"
+          .published-smoke-venv/bin/python tools/package_smoke.py
+
+  github-release:
+    name: Create GitHub Release after PyPI verification
+    if: ${{ inputs.mode == 'publish' }}
+    needs: [build, verify-published]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download original build artifacts and checksums
+        uses: actions/download-artifact@v4
+        with:
+          name: release-dists-${{ inputs.release_tag }}
+          path: release-artifacts
+      - name: Create release from the existing verified tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create "${{ inputs.release_tag }}"
+          release-artifacts/dist/*.whl
+          release-artifacts/dist/*.tar.gz
+          release-artifacts/SHA256SUMS
+          --repo "$GITHUB_REPOSITORY"
+          --verify-tag
+          --title "Portable AI Context ${{ inputs.release_tag }}"
+          --generate-notes
