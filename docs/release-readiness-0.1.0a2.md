@@ -37,7 +37,7 @@ These labels are not interchangeable. Mocked provider HTTP proves PAIC request/r
 | Gemini Apps My Activity JSON adapter | **Synthetic conformance** + cross-platform CI | Supported flat activity-stream subset. Deliberately non-sensitive real Takeout validation is still open in Issue #17 / volunteer Issue #24. Original chat-thread reconstruction is not claimed. |
 | Shared adapter conformance gate | Cross-platform CI + installed-wheel `paic conform` smoke | Implemented. Verifies canonical structure, integrity consistency, and clean HTML/TXT/JSONL round-trip behavior without printing conversation text; does not replace real provider-source validation. |
 | Root-confined stdio MCP server alpha | Cross-platform root-policy/unit tests + official Python MCP SDK v2 `Client(server)` installed-wheel in-memory smoke (PR #47, final CI #110) | Optional `portable-ai-context[mcp]`; base wheel remains MCP-free. `paic mcp --root <workspace>` explicitly uses stdio, exposes exactly `inspect_source`, `conform_source`, `build_checkpoint`, and `build_redaction_review`, exposes no resources, confines sources to root-relative allowed local PAIC files, and writes only fresh server-owned artifacts under `.paic-mcp/`. MCP Roots are not used as authorization. No host-specific Claude Code/Codex/Cursor live integration or remote MCP deployment is claimed. |
-| Claude Code / Codex / Cursor MCP handoff recipes | **Official-doc-aligned static configuration coverage** + dependency-free JSON/TOML shape/security tests (Issue #49) | Inert examples launch only `paic mcp --root ...` and do not add remote URLs, credentials, shell wrappers, or active repository-level self-install configuration. Cursor's project example uses documented `${workspaceFolder}` interpolation. Claude project configuration retains workspace trust/approval semantics. Codex uses its documented STDIO CLI/TOML shape. This is not live-host evidence. |
+| Claude Code / Codex / Cursor MCP handoff recipes | **Official-doc-aligned static configuration coverage** + dependency-free JSON/TOML shape/security tests (Issue #49 / PR #51, final CI #118) | Inert examples launch only `paic mcp --root ...` and do not add remote URLs, credentials, shell wrappers, or active repository-level self-install configuration. Cursor's project example uses documented `${workspaceFolder}` interpolation. Claude project configuration retains workspace trust/approval semantics. Codex uses its documented STDIO CLI/TOML shape. This is not live-host evidence. |
 | Token-aware migration budgets and Lite/Standard/Full profiles | Deterministic fake exact-tokenizer/backend tests + cross-platform CI | Compiler accepts injectable counters. Dependency-free CLI defaults to the character estimate. |
 | Optional local tiktoken raw-text counter | Deterministic lazy-import/model-resolution tests + package-job optional-extra smoke | Base wheel remains tokenizer-free. `portable-ai-context[tokenizers]` installs the reviewed tiktoken 0.13.x line. Exactness means exact plain-text tokenization under the resolved encoding, **not exact provider request/billing tokens**. PAIC delegates model mapping to tiktoken and does not guess unknown mappings. |
 | Compiler backend registry / construction seam | Cross-platform CI + installed-wheel `paic compile --help` surface | Implemented. Built-ins currently include `openai-compatible`, `anthropic`, `gemini`, and `ollama`; `compile_migration()` remains provider-agnostic. |
@@ -61,12 +61,12 @@ The release candidate has continued to evolve after the older package baseline. 
 - Issue #41 / PR #42 — optional tiktoken raw-text exact counter while preserving the zero-dependency base install; final CI #95 passed 10/10 jobs.
 - Issue #43 / PR #44 — pattern-limited explicit body-secret redaction review sharing one redaction primitive with deterministic checkpoint generation; final CI #97 passed 10/10 jobs.
 - Issue #46 / PR #47 — stdio-only root-confined MCP server alpha; final CI #110 passed 10/10 jobs and squash-merged as `a28d8aa223a1ad5388d684e36738bc9623dd500f`.
-- Issue #49 — official-current Claude Code, Codex, and Cursor MCP handoff recipes with inert examples and static configuration/security contract tests. Live host evidence is intentionally separate.
+- Issue #49 / PR #51 — Claude Code, Codex, and Cursor MCP handoff recipes; final tested head `c9b0571bd9d01065bd79d5ed98171e0c78aa8a8d`; final CI #118 / run ID `32250106826` passed 10/10 jobs; squash merge commit `f420382d73cddd7207785f0c9d1262581247ff90`. Live host evidence remains intentionally separate.
 
-The current merged `main` anchor before the Issue #49 handoff-recipe branch is:
+The current merged `main` anchor before the Issue #52 release-note reconciliation branch is:
 
 ```text
-a28d8aa223a1ad5388d684e36738bc9623dd500f
+f420382d73cddd7207785f0c9d1262581247ff90
 ```
 
 Commit identifiers are implementation anchors, not release tags.
