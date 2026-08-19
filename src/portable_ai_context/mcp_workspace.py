@@ -13,7 +13,7 @@ from .errors import PortableAIContextError
 MCP_ARTIFACT_DIRNAME = ".paic-mcp"
 MCP_MAX_SOURCE_BYTES = 64 * 1024 * 1024
 MCP_ALLOWED_SOURCE_SUFFIXES = frozenset(
-    {".aicb", ".jsonl", ".json", ".txt", ".html"}
+    {".aicb", ".jsonl", ".ndjson", ".json", ".txt", ".html", ".htm"}
 )
 _MAX_RELATIVE_PATH_CHARS = 4096
 _SAFE_ARTIFACT_CATEGORIES = frozenset({"checkpoints", "redactions"})
