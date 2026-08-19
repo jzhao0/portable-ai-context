@@ -36,7 +36,7 @@
 - [ ] Bundled model-specific exact tokenizers
 - [x] Pluggable compiler backend registry / CLI boundary (#31)
 - [x] Anthropic Messages backend (#33)
-- [ ] Gemini backend
+- [x] Gemini generateContent backend (#35)
 - [ ] Ollama / local model backend
 - [x] Deterministic no-AI extractive checkpoint mode (#27)
 
