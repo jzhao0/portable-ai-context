@@ -15,7 +15,7 @@
 - [x] Harden ChatGPT shared-URL capture across macOS / Windows / Linux
 - [x] Synthetic/conformance fixtures for supported adapter subsets
 - [x] Package CI that builds wheel + sdist and smoke-tests the installed wheel
-- [ ] Publish the first tagged alpha with checksums / trusted publishing (#18)
+- [x] Publish the first tagged alpha with checksums / trusted publishing (#18)
 
 ## v0.2 — Source adapters
 
@@ -24,7 +24,7 @@
 - [ ] Validate deliberately non-sensitive real Claude/Gemini exports (#17)
 - [ ] Claude shared/page adapter
 - [ ] Gemini page/thread adapter when a reliable source contract exists
-- [ ] DeepSeek chat adapter
+- [ ] DeepSeek chat adapter (#58)
 - [ ] Grok adapter
 - [x] Minimal generic browser DOM capture contract (`role_attribute_v1`)
 - [x] Shared adapter conformance harness + content-free `paic conform` (#25)
