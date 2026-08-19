@@ -7,7 +7,7 @@ from pathlib import Path
 import re
 import sys
 import zipfile
-from typing import Any, Iterable
+from typing import Any
 
 
 SAFE_LITERALS = {
@@ -25,7 +25,6 @@ SUSPICIOUS_KEY_PATTERNS = (
     re.compile(r"^[0-9a-f]{24,}$", re.IGNORECASE),
     re.compile(r"^[A-Za-z0-9_-]{40,}$"),
 )
-MAX_DEFAULT_JSON_BYTES = 256 * 1024 * 1024
 
 
 class ProbeError(RuntimeError):
@@ -81,14 +80,12 @@ def _safe_key(key: Any) -> str:
 
 def _sanitize_string(value: str, sentinel: str) -> str:
     if sentinel in value:
-        # The sentinel is deliberately public/non-sensitive. Preserve a short string
-        # containing it so parser-relevant wrappers such as "Prompted ..." remain visible.
-        if len(value) <= 500:
-            return value
-        position = value.find(sentinel)
-        start = max(0, position - 80)
-        end = min(len(value), position + len(sentinel) + 80)
-        return "<redacted-before>" + value[start:end] + "<redacted-after>"
+        marker = sentinel + "_OK" if sentinel + "_OK" in value else sentinel
+        if value.startswith("Prompted: "):
+            return "Prompted: " + marker
+        if value.startswith("Prompted "):
+            return "Prompted " + marker
+        return marker
     if value in SAFE_LITERALS:
         return value
     return f"<redacted:string:length={len(value)}>"
