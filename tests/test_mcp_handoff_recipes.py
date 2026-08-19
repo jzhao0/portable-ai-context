@@ -13,13 +13,33 @@ except ImportError:  # Python 3.10
 
 ROOT = Path(__file__).resolve().parents[1]
 EXAMPLES = ROOT / "examples" / "mcp"
+DOCS = ROOT / "docs"
 GENERIC_ROOT = "/ABSOLUTE/PATH/TO/WORKSPACE"
+CLAUDE_ROOT_ENV = "${PAIC_MCP_ROOT}"
 EXPECTED_ARGS = ["mcp", "--root"]
+EXPECTED_TOOLS = [
+    "inspect_source",
+    "conform_source",
+    "build_checkpoint",
+    "build_redaction_review",
+]
+EXPECTED_MCP_SUFFIXES = {
+    ".aicb",
+    ".jsonl",
+    ".ndjson",
+    ".json",
+    ".txt",
+    ".html",
+    ".htm",
+}
 
 
 class MCPHandoffRecipeTests(unittest.TestCase):
     def _read(self, name: str) -> str:
         return (EXAMPLES / name).read_text(encoding="utf-8")
+
+    def _read_doc(self, name: str) -> str:
+        return (DOCS / name).read_text(encoding="utf-8")
 
     def _assert_example_text_is_safe(self, text: str) -> None:
         lowered = text.lower()
@@ -36,6 +56,7 @@ class MCPHandoffRecipeTests(unittest.TestCase):
             "powershell",
             "bash -c",
             "sh -c",
+            "paic compile",
         )
         for marker in forbidden:
             with self.subTest(marker=marker):
@@ -62,7 +83,7 @@ class MCPHandoffRecipeTests(unittest.TestCase):
             with self.subTest(path=path.as_posix()):
                 self.assertFalse(path.exists())
 
-    def test_codex_toml_recipe_is_minimal_stdio_paic_command(self):
+    def test_codex_toml_recipe_constrains_tools_and_prompts_by_default(self):
         text = self._read("codex.config.toml.example")
         self._assert_example_text_is_safe(text)
         meaningful = [
@@ -76,6 +97,8 @@ class MCPHandoffRecipeTests(unittest.TestCase):
                 "[mcp_servers.paic]",
                 'command = "paic"',
                 f'args = ["mcp", "--root", "{GENERIC_ROOT}"]',
+                'enabled_tools = ["inspect_source", "conform_source", "build_checkpoint", "build_redaction_review"]',
+                'default_tools_approval_mode = "prompt"',
             ],
         )
         if tomllib is not None:
@@ -87,6 +110,8 @@ class MCPHandoffRecipeTests(unittest.TestCase):
                         "paic": {
                             "command": "paic",
                             "args": [*EXPECTED_ARGS, GENERIC_ROOT],
+                            "enabled_tools": EXPECTED_TOOLS,
+                            "default_tools_approval_mode": "prompt",
                         }
                     }
                 },
@@ -94,13 +119,14 @@ class MCPHandoffRecipeTests(unittest.TestCase):
         else:
             self.assertEqual(sys.version_info[:2], (3, 10))
 
-    def test_claude_project_json_recipe_is_minimal_stdio_paic_command(self):
+    def test_claude_project_json_recipe_uses_environment_root(self):
         text = self._read("claude.mcp.json.example")
         self._assert_example_text_is_safe(text)
+        self.assertNotIn(GENERIC_ROOT, text)
         parsed = json.loads(text)
         self.assertEqual(set(parsed), {"mcpServers"})
         self.assertEqual(set(parsed["mcpServers"]), {"paic"})
-        self._assert_stdio_entry(parsed["mcpServers"]["paic"], expected_root=GENERIC_ROOT)
+        self._assert_stdio_entry(parsed["mcpServers"]["paic"], expected_root=CLAUDE_ROOT_ENV)
 
     def test_cursor_project_json_recipe_uses_workspace_folder(self):
         text = self._read("cursor.mcp.json.example")
@@ -119,6 +145,23 @@ class MCPHandoffRecipeTests(unittest.TestCase):
         for marker in ("/users/", "/home/", "\\users\\", "jzhao0", "junjie"):
             with self.subTest(marker=marker):
                 self.assertNotIn(marker, lowered)
+
+    def test_handoff_guide_locks_hardened_static_contract(self):
+        text = self._read_doc("mcp-handoff-recipes.md")
+        self.assertIn(CLAUDE_ROOT_ENV, text)
+        self.assertIn("enabled_tools", text)
+        self.assertIn('default_tools_approval_mode = "prompt"', text)
+        self.assertIn("static", text.lower())
+        self.assertIn("not", text.lower())
+        self.assertIn("live", text.lower())
+
+    def test_mcp_server_docs_match_seven_suffix_runtime_contract(self):
+        text = self._read_doc("mcp-server.md")
+        marker = "Current allowed local file suffixes are:"
+        self.assertIn(marker, text)
+        block = text.split(marker, 1)[1].split("```text", 1)[1].split("```", 1)[0]
+        documented = {line.strip() for line in block.splitlines() if line.strip()}
+        self.assertEqual(documented, EXPECTED_MCP_SUFFIXES)
 
 
 if __name__ == "__main__":

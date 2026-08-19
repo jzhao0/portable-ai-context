@@ -85,14 +85,16 @@ The server rejects:
 - unsupported source suffixes;
 - source files above the MCP source-size limit.
 
-Current allowed local suffixes are deliberately narrower than the standalone loader surface:
+Current allowed local file suffixes are:
 
 ```text
 .aicb
 .jsonl
+.ndjson
 .json
 .txt
 .html
+.htm
 ```
 
 The current source-size ceiling is 64 MiB at the MCP boundary. Format-specific readers may impose additional limits.

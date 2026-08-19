@@ -89,11 +89,15 @@ The inert repository example is [`examples/mcp/codex.config.toml.example`](../ex
 [mcp_servers.paic]
 command = "paic"
 args = ["mcp", "--root", "/ABSOLUTE/PATH/TO/WORKSPACE"]
+enabled_tools = ["inspect_source", "conform_source", "build_checkpoint", "build_redaction_review"]
+default_tools_approval_mode = "prompt"
 ```
 
 For a machine-wide personal configuration, review and merge the entry into your own `~/.codex/config.toml`. For a project-scoped configuration, Codex documents `.codex/config.toml` for trusted projects; do not assume a newly cloned untrusted project should be allowed to launch local tooling automatically.
 
-Codex supports additional MCP approval and tool-filter settings. Those may be useful as defense in depth, but this recipe does not depend on them for PAIC path authorization.
+The `enabled_tools` list is intentionally exact: the host is allowed to surface only the four tools implemented by the current PAIC MCP alpha. `default_tools_approval_mode = "prompt"` adds a host-side approval boundary before tool execution, including operations that can create checkpoint or redaction-review artifacts. These settings are defense in depth only. They do not replace PAIC's own resolved-path root enforcement, and they do not grant any tool that the PAIC server itself does not expose.
+
+Keep the literal `/ABSOLUTE/PATH/TO/WORKSPACE` placeholder in the shared Codex example. This recipe does not invent shell or environment-variable interpolation inside `args`; replace the placeholder deliberately in your own local/trusted configuration.
 
 ## Claude Code
 
@@ -131,7 +135,7 @@ Claude Code's current documentation reports statuses such as connected, pending 
 
 ### Optional project `.mcp.json`
 
-The inert repository example is [`examples/mcp/claude.mcp.json.example`](../examples/mcp/claude.mcp.json.example):
+Claude Code supports environment-variable expansion in project `.mcp.json` fields including `args`. The inert repository example is [`examples/mcp/claude.mcp.json.example`](../examples/mcp/claude.mcp.json.example):
 
 ```json
 {
@@ -139,13 +143,25 @@ The inert repository example is [`examples/mcp/claude.mcp.json.example`](../exam
     "paic": {
       "type": "stdio",
       "command": "paic",
-      "args": ["mcp", "--root", "/ABSOLUTE/PATH/TO/WORKSPACE"]
+      "args": ["mcp", "--root", "${PAIC_MCP_ROOT}"]
     }
   }
 }
 ```
 
-If you intentionally turn this into a real project-level `.mcp.json`, review the absolute root for each machine before sharing it.
+`PAIC_MCP_ROOT` is a **non-secret local filesystem root** chosen by the user. Set it in the environment before launching Claude Code, for example:
+
+```bash
+export PAIC_MCP_ROOT="/absolute/path/to/workspace"
+```
+
+On Windows PowerShell, the equivalent session-local form is:
+
+```powershell
+$env:PAIC_MCP_ROOT = "D:/Projects/example"
+```
+
+Do not commit a machine-specific absolute path into the shared project example. If `PAIC_MCP_ROOT` is not set, Claude Code's documented `${VAR}` expansion has no value to substitute, so configure the variable before using this recipe.
 
 Claude Code applies workspace trust and project-server approval to project `.mcp.json` files. Current Anthropic documentation explicitly notes that a cloned repository cannot silently approve its own project MCP server. Do not add tracked settings intended to bypass that approval step.
 
@@ -250,5 +266,7 @@ The host may have its own unrelated filesystem, terminal, browser, or network to
 ## Validation status
 
 Repository CI statically validates the three inert examples and their security shape. On Python 3.11+ the Codex TOML example is parsed with the standard-library `tomllib`; Python 3.10 uses a strict exact-template check because `tomllib` is not part of that runtime's standard library. Claude/Cursor JSON examples are parsed with the standard-library `json` module on every supported Python version.
+
+The static checks lock the shared Claude `${PAIC_MCP_ROOT}` project-root contract, the exact four-tool Codex allowlist plus `prompt` approval mode, the Cursor `${workspaceFolder}` root, and the absence of remote URLs, credentials, shell wrappers, `paic compile`, active self-install config, or extra PAIC tool permissions.
 
 This proves that the committed recipes are syntactically/structurally constrained as documented. It is **not** evidence that the current installed versions of Claude Code, Codex, and Cursor were all launched and live-smoke-tested against PAIC. Any such live-host evidence must be recorded separately and content-free.
