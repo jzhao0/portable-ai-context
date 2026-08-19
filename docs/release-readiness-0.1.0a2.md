@@ -1,8 +1,27 @@
 # 0.1.0a2 release-readiness ledger
 
-This document records what Portable AI Context has actually verified before the `0.1.0a2` alpha publication step. It deliberately distinguishes deterministic/synthetic test coverage from real live capture/provider evidence.
+This document records what Portable AI Context verified for and through the `0.1.0a2` alpha publication. It deliberately distinguishes deterministic/synthetic test coverage from real live capture/provider evidence.
 
-**Publication status:** release candidate only. `0.1.0a2` is not considered published until the tag/release/PyPI/checksum workflow in Issue #18 is completed and independently smoke-tested.
+**Publication status:** published on 2026-08-19 through the protected GitHub Actions / PyPI Trusted Publishing workflow tracked in Issue #18. Formal publish run `32259880978` completed successfully, PyPI hashes matched the tagged build, a fresh exact-version PyPI install passed package smoke, and the matching GitHub Release was created from protected tag `v0.1.0a2`.
+
+Release identity:
+
+```text
+version = 0.1.0a2
+tag = v0.1.0a2
+commit = 5938f2c52e7ce015662b2c20feb4c5c2d76e179f
+tree = 307bfd28db06ff025e95f7b236e7dc7ac9081d94
+```
+
+Published distribution hashes from the formal publish run:
+
+```text
+portable_ai_context-0.1.0a2-py3-none-any.whl
+SHA256 9443d26fdc22e08e41e0adc65144bc378a78911f050e76379b1a166f79bf9108
+
+portable_ai_context-0.1.0a2.tar.gz
+SHA256 f19db5489f44aa27d1100e7ee7d03d3c01ad9adb1348426991b44490b33a380b
+```
 
 Current version alignment remains:
 
@@ -11,7 +30,7 @@ pyproject.toml project.version = 0.1.0a2
 portable_ai_context.__version__ = 0.1.0a2
 ```
 
-The installed-wheel package smoke also verifies that `paic --version` matches the distribution/package version.
+The published-install package smoke also verified that `paic --version` matches the distribution/package version.
 
 ## Evidence classes
 
@@ -46,11 +65,11 @@ These labels are not interchangeable. Mocked provider HTTP proves PAIC request/r
 | Gemini `generateContent` compiler transport | **Mocked provider HTTP** + cross-platform CI (PR #36, final CI #81) + installed-wheel CLI surface | Implemented using the stateless REST completion contract. No live paid Gemini call is claimed. |
 | Native Ollama `/api/chat` compiler transport | **Mocked provider HTTP** + cross-platform CI (PR #38, final CI #90) + installed-wheel CLI surface | Implemented. Defaults to keyless `http://localhost:11434`, while explicit custom `--api-base` may access a remote host. CI does not install/start Ollama, pull a model, or run model compute; no real local-model smoke is claimed. |
 | Chromium browser capture extension | **Real live smoke** on Windows Edge using a deliberately public/non-sensitive two-message conversation; preview count/tail matched downloaded JSONL; `paic inspect`/`verify` reproduced the same canonical messages. | Edge real smoke verified. Chrome and Brave are first-target Chromium browsers but have not been separately live-smoke-tested. Firefox is feasibility-only. |
-| Wheel/sdist packaging | **Real CI distribution smoke**: build wheel + sdist, install only the wheel into an isolated venv, verify distribution/package/CLI version, source inspect/conform, `.aicb` roundtrip, deterministic checkpoint, pattern-limited `paic redact` fake-secret review, packaged compiler/token-counter/MCP CLI surfaces, then explicitly install/smoke tokenizer and MCP extras from the same built wheel | The base-wheel smoke verifies both tiktoken and MCP are absent before optional extras are installed. Redaction smoke verifies the synthetic secret is absent from stdout/report, supported-pattern rescan is zero, and manual review remains required. The MCP extra smoke uses the official SDK in memory and starts no listener. Publication remains separate. |
+| Wheel/sdist packaging | **Real CI distribution smoke + published-install smoke**: build wheel + sdist, install only the wheel into an isolated venv, verify distribution/package/CLI version, source inspect/conform, `.aicb` roundtrip, deterministic checkpoint, pattern-limited `paic redact` fake-secret review, packaged compiler/token-counter/MCP CLI surfaces, then explicitly install/smoke tokenizer and MCP extras from the same built wheel; formal publish verification also fresh-installed exact `portable-ai-context==0.1.0a2` from PyPI | The base-wheel smoke verifies both tiktoken and MCP are absent before optional extras are installed. Redaction smoke verifies the synthetic secret is absent from stdout/report, supported-pattern rescan is zero, and manual review remains required. The MCP extra smoke uses the official SDK in memory and starts no listener. Formal publication and published-byte verification completed in Issue #18. |
 
 ## Recent implementation evidence anchors
 
-The release candidate has continued to evolve after the older package baseline. The current ledger includes these implementation slices:
+The `0.1.0a2` implementation evolved through these reviewed slices before publication:
 
 - Issue #27 / PR #28 — deterministic no-AI extractive checkpoint mode.
 - Issue #29 / PR #30 — `.aicb` first-class strict reader/verifier and installed-wheel roundtrip.
@@ -62,14 +81,17 @@ The release candidate has continued to evolve after the older package baseline. 
 - Issue #43 / PR #44 — pattern-limited explicit body-secret redaction review sharing one redaction primitive with deterministic checkpoint generation; final CI #97 passed 10/10 jobs.
 - Issue #46 / PR #47 — stdio-only root-confined MCP server alpha; final CI #110 passed 10/10 jobs and squash-merged as `a28d8aa223a1ad5388d684e36738bc9623dd500f`.
 - Issue #49 / PR #51 — Claude Code, Codex, and Cursor MCP handoff recipes; final tested head `c9b0571bd9d01065bd79d5ed98171e0c78aa8a8d`; final CI #118 / run ID `32250106826` passed 10/10 jobs; squash merge commit `f420382d73cddd7207785f0c9d1262581247ff90`. Live host evidence remains intentionally separate.
+- PR #55 — finalized the `0.1.0a2` changelog; final tested source tree SHA `307bfd28db06ff025e95f7b236e7dc7ac9081d94` passed 10/10 CI and is byte-identical to the released source tree.
 
-The current merged `main` anchor before the Issue #52 release-note reconciliation branch is:
+The immutable `0.1.0a2` release identity is:
 
 ```text
-f420382d73cddd7207785f0c9d1262581247ff90
+tag: v0.1.0a2
+commit: 5938f2c52e7ce015662b2c20feb4c5c2d76e179f
+tree: 307bfd28db06ff025e95f7b236e7dc7ac9081d94
 ```
 
-Commit identifiers are implementation anchors, not release tags.
+Commit identifiers are implementation anchors; the protected release tag is the public release identity.
 
 ## Content-free real-smoke evidence
 
@@ -97,21 +119,23 @@ The deliberately public/non-sensitive two-message smoke artifact produced:
 - runtime privacy markers: none
 - supported body-secret counters: all zero
 
-## Release-candidate gates
+## Publication gates — completed
 
-Before calling `0.1.0a2` published:
+Issue #18 recorded and verified these conditions before and after publication:
 
-1. package/release CI must remain green;
-2. repository version, package `__version__`, and `paic --version` must agree at `0.1.0a2`;
-3. release notes must preserve the evidence boundaries above, especially Claude/Gemini real-export status and mocked-vs-live compiler transport status;
-4. publication must use a tagged commit and produce matching wheel/sdist checksums (#18);
-5. a fresh install of the **published** artifact must pass `paic --version` and a local inspect smoke;
-6. no release note may describe `.aicb` digests as signing/authenticity evidence;
-7. no mocked/synthetic/provider-in-memory/static-host-config result may be relabeled as a live provider/host validation;
-8. optional tokenizer support must not make tiktoken an unconditional base dependency or be described as exact whole-request billing tokenization;
-9. a redaction report with zero remaining **supported** patterns must never be described as proof that the artifact is generally safe to share; manual review remains required;
-10. optional MCP support must not make the MCP SDK an unconditional base dependency, and in-memory SDK evidence must not be described as a host-specific Claude Code/Codex/Cursor live smoke or remote-service deployment;
-11. handoff recipe examples must remain inert/reviewable and must not silently auto-install/approve PAIC in a cloned repository or introduce remote URLs/credentials into the stdio recipe.
+1. package/release CI remained green;
+2. repository version, package `__version__`, and `paic --version` agreed at `0.1.0a2`;
+3. release notes preserved the evidence boundaries above, especially Claude/Gemini real-export status and mocked-vs-live compiler transport status;
+4. publication used protected tag `v0.1.0a2` and generated wheel/sdist checksums;
+5. a fresh install of the published artifact passed `paic --version` and package smoke;
+6. no release note describes `.aicb` digests as signing/authenticity evidence;
+7. no mocked/synthetic/provider-in-memory/static-host-config result is relabeled as a live provider/host validation;
+8. optional tokenizer support does not make tiktoken an unconditional base dependency or claim exact whole-request billing tokenization;
+9. a redaction report with zero remaining supported patterns is not described as proof that the artifact is generally safe to share; manual review remains required;
+10. optional MCP support does not make the MCP SDK an unconditional base dependency, and in-memory SDK evidence is not described as host-specific Claude Code/Codex/Cursor live smoke or remote-service deployment;
+11. handoff recipe examples remain inert/reviewable and do not silently auto-install/approve PAIC in a cloned repository or introduce remote URLs/credentials into the stdio recipe.
+
+Formal publish run `32259880978` passed the build, prepublish tag check, PyPI Trusted Publishing, PyPI hash/fresh-install verification, and GitHub Release jobs. Issue #18 is closed as completed.
 
 ## Known alpha limitations
 
@@ -135,6 +159,6 @@ Before calling `0.1.0a2` published:
 - The MCP alpha exposes no arbitrary file/resource read, no compile/provider/network tool, and no arbitrary output path. Generated checkpoint/redaction content remains on disk under server-owned `.paic-mcp/` directories rather than being returned as raw MCP resource text.
 - Claude Code, Codex, and Cursor recipes are aligned to current official configuration documentation and statically tested, but no all-three-host live MCP integration smoke is recorded here.
 - Third-party host configuration formats can change independently of PAIC; recipes must be rechecked against official documentation when evidence changes.
-- `0.1.0a2` remains unpublished until Issue #18 is completed.
+- `0.1.0a2` is published and immutable; behavior changes after this point require a new version rather than modifying the released artifacts or protected tag.
 
 The release ledger should be updated whenever an evidence class changes. A synthetic, mocked, in-memory, or static-configuration test must never be silently relabeled as real provider/host validation.
