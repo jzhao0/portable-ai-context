@@ -1,0 +1,16 @@
+{
+  "schema_version": "0.1-alpha",
+  "created_at": "2026-08-19T12:00:00+00:00",
+  "conversation": {
+    "title": "Published 0.1.0a2 compatibility fixture",
+    "message_count": 4,
+    "digest": "a447e6a46043d4f763e3e13ac1ec00f15cb7003758c5504977ba8925aa7b1ce4",
+    "source_kind": "synthetic"
+  },
+  "artifacts": [
+    "manifest.json",
+    "conversation.jsonl",
+    "integrity.json",
+    "privacy.json"
+  ]
+}
