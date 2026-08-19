@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0a2 — Unreleased
+## 0.1.0a2 — 2026-08-19
 
 ### Core portability and verification
 
