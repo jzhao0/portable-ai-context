@@ -1,10 +1,13 @@
+import contextlib
+import io
 import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
 import zipfile
 
-from tools.real_export_probe import ProbeError, run_probe
+from tools.real_export_probe import ProbeError, main, run_probe
 
 
 CLAUDE_SENTINEL = "PAIC_CLAUDE_REAL_EXPORT_SENTINEL_20260819"
@@ -166,6 +169,29 @@ class RealExportProbeTests(unittest.TestCase):
                     max_json_mb=10,
                 )
         self.assertNotIn("PRIVATE_HTML_CONTENT", str(raised.exception))
+
+    def test_local_read_error_does_not_print_private_path(self):
+        private_path = r"C:\Users\PRIVATE_USER\Secret Exports\claude-export.zip"
+        stderr = io.StringIO()
+        with mock.patch(
+            "tools.real_export_probe.run_probe",
+            side_effect=PermissionError(13, "permission denied", private_path),
+        ):
+            with contextlib.redirect_stderr(stderr):
+                code = main(
+                    [
+                        "claude",
+                        private_path,
+                        "--sentinel",
+                        CLAUDE_SENTINEL,
+                    ]
+                )
+        error = stderr.getvalue()
+        self.assertEqual(code, 2)
+        self.assertIn("PermissionError", error)
+        self.assertNotIn("PRIVATE_USER", error)
+        self.assertNotIn("Secret Exports", error)
+        self.assertNotIn(private_path, error)
 
 
 if __name__ == "__main__":
