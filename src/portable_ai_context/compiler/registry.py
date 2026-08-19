@@ -68,11 +68,15 @@ def create_backend(name: str, config: BackendConfig) -> CompilerBackend:
             f"unknown compiler backend; available backends: {available}"
         )
     try:
-        return factory(config)
+        backend = factory(config)
     except CompilerError:
         raise
     except Exception as exc:
         raise CompilerError("compiler backend construction failed") from exc
+
+    if not callable(getattr(backend, "complete", None)):
+        raise CompilerError("compiler backend factory returned an invalid backend")
+    return backend
 
 
 def _openai_compatible_factory(config: BackendConfig) -> CompilerBackend:
