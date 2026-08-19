@@ -10,24 +10,29 @@
 - [x] `.aicb` alpha bundle
 - [x] OpenAI-compatible hierarchical migration compiler
 - [x] CLI
-- [x] Local unit tests
-- [ ] Harden ChatGPT shared-URL capture across macOS / Windows / Linux
-- [ ] Golden fixtures generated from synthetic conversations
-- [ ] Package/release CI
+- [x] Cross-platform unit-test matrix
+- [x] Harden ChatGPT shared-URL capture across macOS / Windows / Linux
+- [x] Synthetic/conformance fixtures for supported adapter subsets
+- [x] Package CI that builds wheel + sdist and smoke-tests the installed wheel
+- [ ] Publish the first tagged alpha with checksums / trusted publishing (#18)
 
 ## v0.2 — Source adapters
 
-- [ ] Claude export/page adapter
-- [ ] Gemini export/page adapter
+- [x] Claude local single-conversation JSON export subset
+- [x] Gemini Apps Google My Activity JSON subset
+- [ ] Validate deliberately non-sensitive real Claude/Gemini exports (#17)
+- [ ] Claude shared/page adapter
+- [ ] Gemini page/thread adapter when a reliable source contract exists
 - [ ] DeepSeek chat adapter
 - [ ] Grok adapter
-- [ ] Generic DOM capture contract
-- [ ] Adapter conformance test suite
+- [x] Minimal generic browser DOM capture contract (`role_attribute_v1`)
+- [ ] Shared adapter conformance harness beyond adapter-specific tests
 
 ## v0.3 — Better context compilation
 
-- [ ] Exact tokenizer-aware budgets
-- [ ] Lite / Standard / Full migration profiles
+- [x] Token-counter abstraction with injectable exact counters
+- [x] Lite / Standard / Full migration profiles
+- [ ] Bundled model-specific exact tokenizers
 - [ ] Pluggable compiler backends
 - [ ] Anthropic backend
 - [ ] Gemini backend
@@ -36,9 +41,11 @@
 
 ## v0.4 — Capture UX
 
-- [ ] Chromium browser extension
-- [ ] One-click clean capture
-- [ ] Snapshot completeness UI
+- [x] Chromium browser extension MVP
+- [x] Message-count + last-user/assistant preview before browser download
+- [ ] Separate Chrome and Brave live smoke validation
+- [ ] Firefox runtime/package validation
+- [ ] Broader snapshot completeness UI
 - [ ] Optional body-secret redaction review
 
 ## v0.5 — Handoff integrations
@@ -54,3 +61,5 @@
 - [ ] Backward-compatibility policy
 - [ ] Signed releases / checksums
 - [ ] Cross-platform release matrix
+
+See [`docs/release-readiness-0.1.0a2.md`](docs/release-readiness-0.1.0a2.md) for the distinction between synthetic CI coverage and real live evidence.
