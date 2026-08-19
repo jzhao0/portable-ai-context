@@ -22,6 +22,9 @@ classifiers = [
 ]
 dependencies = []
 
+[project.optional-dependencies]
+tokenizers = ["tiktoken>=0.13,<0.14"]
+
 [project.scripts]
 paic = "portable_ai_context.cli:main"
 

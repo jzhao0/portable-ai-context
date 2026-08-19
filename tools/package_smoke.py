@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.metadata
+import importlib.util
 import json
 from pathlib import Path
 import subprocess
@@ -33,6 +34,9 @@ def main() -> int:
             "package __version__ mismatch: "
             f"package={portable_ai_context.__version__!r} expected={expected_version!r}"
         )
+
+    if importlib.util.find_spec("tiktoken") is not None:
+        raise SystemExit("base wheel unexpectedly installed the optional tiktoken dependency")
 
     package_path = Path(portable_ai_context.__file__).resolve()
     if "site-packages" not in package_path.parts:
@@ -74,24 +78,26 @@ def main() -> int:
         capture_output=True,
         text=True,
     )
-    if "--backend" not in compile_help_run.stdout:
-        raise SystemExit("installed-wheel compile help did not expose --backend")
-    if "openai-compatible" not in compile_help_run.stdout:
-        raise SystemExit("installed-wheel compile help did not expose the default backend")
-    if "anthropic" not in compile_help_run.stdout:
-        raise SystemExit("installed-wheel compile help did not expose the Anthropic backend surface")
-    if "--anthropic-max-tokens" not in compile_help_run.stdout:
-        raise SystemExit("installed-wheel compile help did not expose Anthropic max_tokens configuration")
-    if "gemini" not in compile_help_run.stdout:
-        raise SystemExit("installed-wheel compile help did not expose the Gemini backend surface")
-    if "--gemini-max-output-tokens" not in compile_help_run.stdout:
-        raise SystemExit("installed-wheel compile help did not expose Gemini maxOutputTokens configuration")
-    if "ollama" not in compile_help_run.stdout:
-        raise SystemExit("installed-wheel compile help did not expose the Ollama backend surface")
-    if "--ollama-num-predict" not in compile_help_run.stdout:
-        raise SystemExit("installed-wheel compile help did not expose Ollama num_predict configuration")
-    if "--ollama-api-key-env" not in compile_help_run.stdout:
-        raise SystemExit("installed-wheel compile help did not expose optional Ollama API-key configuration")
+    required_compile_help = (
+        "--backend",
+        "openai-compatible",
+        "anthropic",
+        "--anthropic-max-tokens",
+        "gemini",
+        "--gemini-max-output-tokens",
+        "ollama",
+        "--ollama-num-predict",
+        "--ollama-api-key-env",
+        "--token-counter",
+        "tiktoken",
+        "--tokenizer-model",
+        "--tiktoken-encoding",
+    )
+    for marker in required_compile_help:
+        if marker not in compile_help_run.stdout:
+            raise SystemExit(
+                f"installed-wheel compile help did not expose expected surface: {marker}"
+            )
 
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
@@ -177,10 +183,12 @@ def main() -> int:
                 "distribution_version": installed_version,
                 "package_version": portable_ai_context.__version__,
                 "cli_version": version_run.stdout.strip(),
+                "base_wheel_tiktoken_installed": False,
                 "compiler_backend_selector": True,
                 "anthropic_backend_surface": True,
                 "gemini_backend_surface": True,
                 "ollama_backend_surface": True,
+                "token_counter_selector": True,
                 "source": inspect_report["source"],
                 "message_count": inspect_report["message_count"],
                 "conformance_ok": conform_report["ok"],

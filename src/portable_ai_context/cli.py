@@ -15,6 +15,7 @@ from .compiler import (
     DEFAULT_GEMINI_MAX_OUTPUT_TOKENS,
     DEFAULT_OLLAMA_NUM_PREDICT,
     BackendConfig,
+    TiktokenTokenCounter,
     compile_migration,
     create_backend,
 )
@@ -50,6 +51,24 @@ def _positive_float(value: str) -> float:
     if parsed <= 0:
         raise argparse.ArgumentTypeError("must be positive")
     return parsed
+
+
+def _compile_token_counter(args):
+    if args.token_counter == "character":
+        if args.tokenizer_model is not None or args.tiktoken_encoding is not None:
+            raise PortableAIContextError(
+                "tiktoken tokenizer options require --token-counter tiktoken"
+            )
+        return None
+    if args.token_counter == "tiktoken":
+        model = None if args.tiktoken_encoding is not None else (
+            args.tokenizer_model or args.final_model
+        )
+        return TiktokenTokenCounter(
+            encoding_name=args.tiktoken_encoding,
+            model=model,
+        )
+    raise PortableAIContextError("unknown token counter")
 
 
 def cmd_inspect(args) -> int:
@@ -168,6 +187,7 @@ def cmd_compile(args) -> int:
             },
         ),
     )
+    token_counter = _compile_token_counter(args)
     out = Path(args.output)
     out.mkdir(parents=True, exist_ok=True)
     result = compile_migration(
@@ -180,6 +200,7 @@ def cmd_compile(args) -> int:
         state_path=args.state,
         budget_tokens=args.budget,
         profile=args.profile,
+        token_counter=token_counter,
         chars_per_token=args.chars_per_token,
     )
     prompt_path = out / "MIGRATION_PROMPT.md"
@@ -315,6 +336,20 @@ def build_parser() -> argparse.ArgumentParser:
             "unset by default so localhost remains keyless"
         ),
     )
+    compile_p.add_argument(
+        "--token-counter",
+        choices=["character", "tiktoken"],
+        default="character",
+        help="final/source token counter (default: dependency-free character estimate)",
+    )
+    compile_p.add_argument(
+        "--tokenizer-model",
+        help="model passed to tiktoken's official model-to-encoding lookup",
+    )
+    compile_p.add_argument(
+        "--tiktoken-encoding",
+        help="explicit tiktoken encoding name; overrides model lookup",
+    )
     compile_p.add_argument("--chunk-chars", type=_positive_int, default=120000)
     compile_p.add_argument("--reduce-chars", type=_positive_int, default=180000)
     budget_group = compile_p.add_mutually_exclusive_group()
@@ -328,7 +363,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--chars-per-token",
         type=_positive_float,
         default=4.0,
-        help="character/token estimate used by the dependency-free fallback counter",
+        help="character/token estimate used when --token-counter=character",
     )
     compile_p.add_argument("--state")
     compile_p.add_argument("--timeout", type=_positive_int, default=300)

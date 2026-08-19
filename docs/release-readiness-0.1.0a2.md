@@ -4,7 +4,7 @@ This document records what Portable AI Context has actually verified before the 
 
 **Publication status:** release candidate only. `0.1.0a2` is not considered published until the tag/release/PyPI/checksum workflow in Issue #18 is completed and independently smoke-tested.
 
-Current version alignment on `main` remains:
+Current version alignment remains:
 
 ```text
 pyproject.toml project.version = 0.1.0a2
@@ -34,18 +34,19 @@ These labels are not interchangeable. Mocked provider HTTP proves PAIC request/r
 | Claude local conversation JSON adapter | **Synthetic conformance** + cross-platform CI | Supported alpha subset. Deliberately non-sensitive real export validation is still open in Issue #17 / volunteer Issue #22. No authenticated scraping/page adapter. |
 | Gemini Apps My Activity JSON adapter | **Synthetic conformance** + cross-platform CI | Supported flat activity-stream subset. Deliberately non-sensitive real Takeout validation is still open in Issue #17 / volunteer Issue #24. Original chat-thread reconstruction is not claimed. |
 | Shared adapter conformance gate | Cross-platform CI + installed-wheel `paic conform` smoke | Implemented. Verifies canonical structure, integrity consistency, and clean HTML/TXT/JSONL round-trip behavior without printing conversation text; does not replace real provider-source validation. |
-| Token-aware migration budgets and Lite/Standard/Full profiles | Deterministic fake exact-tokenizer/backend tests + cross-platform CI | Compiler accepts injectable exact counters. Dependency-free CLI still uses an explicit character/token estimate unless an exact tokenizer is supplied through the Python API. Exact target-model tokenization is not bundled. |
+| Token-aware migration budgets and Lite/Standard/Full profiles | Deterministic fake exact-tokenizer/backend tests + cross-platform CI | Compiler accepts injectable counters. Dependency-free CLI defaults to the character estimate. |
+| Optional local tiktoken raw-text counter | Deterministic lazy-import/model-resolution tests + package-job optional-extra smoke | Base wheel remains tokenizer-free. `portable-ai-context[tokenizers]` installs the reviewed tiktoken 0.13.x line. Exactness means exact plain-text tokenization under the resolved encoding, **not exact provider request/billing tokens**. PAIC delegates model mapping to tiktoken and does not guess unknown mappings. |
 | Compiler backend registry / construction seam | Cross-platform CI + installed-wheel `paic compile --help` surface | Implemented. Built-ins currently include `openai-compatible`, `anthropic`, `gemini`, and `ollama`; `compile_migration()` remains provider-agnostic. |
 | OpenAI-compatible compiler transport | Deterministic/mocked transport tests + cross-platform CI | Implemented. This ledger does not claim live-provider compiler evidence. |
 | Anthropic Messages compiler transport | **Mocked provider HTTP** + cross-platform CI (PR #34, final CI #76) + installed-wheel CLI surface | Implemented using the documented non-streaming Messages contract. No live paid Anthropic call is claimed. |
 | Gemini `generateContent` compiler transport | **Mocked provider HTTP** + cross-platform CI (PR #36, final CI #81) + installed-wheel CLI surface | Implemented using the stateless REST completion contract. No live paid Gemini call is claimed. |
 | Native Ollama `/api/chat` compiler transport | **Mocked provider HTTP** + cross-platform CI (PR #38, final CI #90) + installed-wheel CLI surface | Implemented. Defaults to keyless `http://localhost:11434`, while explicit custom `--api-base` may access a remote host. CI does not install/start Ollama, pull a model, or run model compute; no real local-model smoke is claimed. |
 | Chromium browser capture extension | **Real live smoke** on Windows Edge using a deliberately public/non-sensitive two-message conversation; preview count/tail matched downloaded JSONL; `paic inspect`/`verify` reproduced the same canonical messages. | Edge real smoke verified. Chrome and Brave are first-target Chromium browsers but have not been separately live-smoke-tested. Firefox is feasibility-only. |
-| Wheel/sdist packaging | **Real CI distribution smoke**: build wheel + sdist, install only the wheel into an isolated venv, verify distribution/package/CLI version, source inspect/conform, `.aicb` roundtrip, deterministic checkpoint, and packaged compiler-backend CLI surfaces | Latest full evidence is PR #38 CI #90: package job plus Ubuntu/Windows/macOS × Python 3.10/3.12/3.13 all succeeded (10/10 jobs). Publication is still separate. |
+| Wheel/sdist packaging | **Real CI distribution smoke**: build wheel + sdist, install only the wheel into an isolated venv, verify distribution/package/CLI version, source inspect/conform, `.aicb` roundtrip, deterministic checkpoint, packaged compiler/token-counter CLI surfaces, then explicitly install/smoke the tokenizer extra | The base-wheel smoke verifies tiktoken is absent before the extra is installed. Publication remains separate. |
 
 ## Recent implementation evidence anchors
 
-The release candidate has continued to evolve after the older package baseline. The current ledger includes these merged implementation slices:
+The release candidate has continued to evolve after the older package baseline. The current ledger includes these implementation slices:
 
 - Issue #27 / PR #28 — deterministic no-AI extractive checkpoint mode.
 - Issue #29 / PR #30 — `.aicb` first-class strict reader/verifier and installed-wheel roundtrip.
@@ -53,14 +54,15 @@ The release candidate has continued to evolve after the older package baseline. 
 - Issue #33 / PR #34 — Anthropic Messages backend; final CI #76 passed 10/10 jobs.
 - Issue #35 / PR #36 — Gemini `generateContent` backend; final CI #81 passed 10/10 jobs.
 - Issue #37 / PR #38 — native Ollama backend and URL/key-isolation hardening; final CI #90 passed 10/10 jobs.
+- Issue #41 — optional tiktoken raw-text exact counter while preserving the zero-dependency base install.
 
-The latest merged `main` anchor after the Ollama slice is:
+The earlier major-code `main` anchor after the Ollama slice is:
 
 ```text
 b46c73b26305289371189e850d9091021001e56d
 ```
 
-This commit identifier is an implementation anchor, not a release tag.
+Later documentation/token-counter changes are tracked by their own PR/CI evidence. Commit identifiers are implementation anchors, not release tags.
 
 ## Content-free real-smoke evidence
 
@@ -98,7 +100,8 @@ Before calling `0.1.0a2` published:
 4. publication must use a tagged commit and produce matching wheel/sdist checksums (#18);
 5. a fresh install of the **published** artifact must pass `paic --version` and a local inspect smoke;
 6. no release note may describe `.aicb` digests as signing/authenticity evidence;
-7. no mocked/synthetic provider result may be relabeled as a live provider validation.
+7. no mocked/synthetic provider result may be relabeled as a live provider validation;
+8. optional tokenizer support must not make tiktoken an unconditional base dependency or be described as exact whole-request billing tokenization.
 
 ## Known alpha limitations
 
@@ -110,7 +113,9 @@ Before calling `0.1.0a2` published:
 - Chrome and Brave have not been separately live-smoke-tested for the extension; Firefox remains unvalidated.
 - The extension does not redact secrets deliberately typed into conversation text.
 - Deterministic checkpoint redaction is pattern-limited and should not be treated as a general confidentiality scrubber.
-- Exact target-model tokenization is not bundled; exact counters are injectable through the Python API.
+- Optional tiktoken exactness is raw-text/encoding exactness only; exact provider request/billing counts are not claimed.
+- PAIC does not maintain speculative model-to-encoding mappings. Unknown tiktoken model mappings require an explicit encoding.
+- Provider-native token-count adapters for Anthropic/Gemini/Ollama semantics remain future work; Anthropic's documented count is itself an estimate, Gemini counting is provider-side, and Ollama has no universal count-only native chat tokenizer endpoint.
 - Anthropic, Gemini, and Ollama compiler transports have deterministic/mocked contract coverage, not live provider/model execution evidence in this ledger.
 - The Ollama backend is local only by default; a caller-selected remote `--api-base` can cause network access.
 - No real Ollama daemon/model smoke is recorded here.

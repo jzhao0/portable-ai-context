@@ -33,7 +33,8 @@
 
 - [x] Token-counter abstraction with injectable exact counters
 - [x] Lite / Standard / Full migration profiles
-- [ ] Bundled model-specific exact tokenizers
+- [x] Optional local exact tiktoken raw-text counter (#41)
+- [ ] Provider-native token-count adapters where semantics are trustworthy
 - [x] Pluggable compiler backend registry / CLI boundary (#31)
 - [x] Anthropic Messages backend (#33)
 - [x] Gemini generateContent backend (#35)
