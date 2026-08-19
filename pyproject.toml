@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "portable-ai-context"
-version = "0.1.0a1"
+version = "0.1.0a2"
 description = "Privacy-aware, verifiable conversation-to-context migration for AI assistants."
 readme = "README.md"
 requires-python = ">=3.10"
