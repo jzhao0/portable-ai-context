@@ -10,6 +10,7 @@ import sys
 from . import __version__
 from .adapters import load_conversation
 from .compiler import OpenAICompatibleBackend, compile_migration
+from .conformance import inspect_conformance
 from .errors import PortableAIContextError
 from .exporters import write_bundle, write_standard
 from .integrity import inspect as inspect_integrity
@@ -62,6 +63,14 @@ def cmd_verify(args) -> int:
         print("\nLAST USER:\n" + (last_user.text if last_user else "<none>"))
         print("\nLAST ASSISTANT:\n" + (last_assistant.text if last_assistant else "<none>"))
     return 0
+
+
+def cmd_conform(args) -> int:
+    """Run the shared canonical/round-trip contract without printing conversation text."""
+    conv = load_conversation(args.source)
+    report = inspect_conformance(conv)
+    _print_json(report.to_dict())
+    return 0 if report.ok else 3
 
 
 def cmd_smoke(args) -> int:
@@ -153,6 +162,13 @@ def build_parser() -> argparse.ArgumentParser:
     verify_p.add_argument("source")
     verify_p.add_argument("--show-tail", action="store_true")
     verify_p.set_defaults(func=cmd_verify)
+
+    conform_p = sub.add_parser(
+        "conform",
+        help="run content-free canonical and standard round-trip checks",
+    )
+    conform_p.add_argument("source")
+    conform_p.set_defaults(func=cmd_conform)
 
     smoke_p = sub.add_parser(
         "smoke",
