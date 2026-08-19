@@ -33,16 +33,22 @@ class OpenAICompatibleBackend:
         )
         try:
             with urllib.request.urlopen(req, timeout=self.timeout) as resp:
-                data = json.loads(resp.read().decode("utf-8", errors="replace"))
+                raw = resp.read()
         except urllib.error.HTTPError as exc:
-            body = exc.read().decode("utf-8", errors="replace")[:1000]
-            raise CompilerError(f"compiler HTTP {exc.code}: {body}") from exc
+            raise CompilerError(f"compiler backend HTTP status {exc.code}") from exc
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            raise CompilerError("compiler backend transport failed") from exc
         except Exception as exc:
-            raise CompilerError(f"compiler request failed: {type(exc).__name__}: {exc}") from exc
+            raise CompilerError("compiler backend request failed") from exc
+
+        try:
+            data = json.loads(raw.decode("utf-8", errors="strict"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise CompilerError("compiler backend returned invalid JSON") from exc
 
         try:
             text = data["choices"][0]["message"]["content"]
-        except Exception as exc:
+        except (KeyError, IndexError, TypeError) as exc:
             raise CompilerError("unexpected OpenAI-compatible response shape") from exc
         if not isinstance(text, str) or not text.strip():
             raise CompilerError("compiler returned empty content")

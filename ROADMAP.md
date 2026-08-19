@@ -34,7 +34,7 @@
 - [x] Token-counter abstraction with injectable exact counters
 - [x] Lite / Standard / Full migration profiles
 - [ ] Bundled model-specific exact tokenizers
-- [ ] Pluggable compiler backends
+- [x] Pluggable compiler backend registry / CLI boundary (#31)
 - [ ] Anthropic backend
 - [ ] Gemini backend
 - [ ] Ollama / local model backend

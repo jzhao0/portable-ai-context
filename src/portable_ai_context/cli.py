@@ -10,7 +10,7 @@ import sys
 from . import __version__
 from .adapters import load_conversation
 from .checkpoint import MIN_BUDGET_TOKENS, build_extractive_checkpoint
-from .compiler import OpenAICompatibleBackend, compile_migration
+from .compiler import BackendConfig, compile_migration, create_backend
 from .conformance import inspect_conformance
 from .errors import PortableAIContextError
 from .exporters import write_bundle, write_standard
@@ -146,12 +146,15 @@ def cmd_checkpoint(args) -> int:
 
 def cmd_compile(args) -> int:
     conv = load_conversation(args.source)
-    key = os.environ.get(args.api_key_env)
-    if not key:
-        raise PortableAIContextError(
-            f"environment variable {args.api_key_env!r} is not set"
-        )
-    backend = OpenAICompatibleBackend(api_base=args.api_base, api_key=key, timeout=args.timeout)
+    backend = create_backend(
+        args.backend,
+        BackendConfig(
+            api_base=args.api_base,
+            api_key_env=args.api_key_env,
+            timeout=args.timeout,
+            environment=os.environ,
+        ),
+    )
     out = Path(args.output)
     out.mkdir(parents=True, exist_ok=True)
     result = compile_migration(
@@ -253,7 +256,15 @@ def build_parser() -> argparse.ArgumentParser:
     compile_p = sub.add_parser("compile", help="compile a continuation-focused migration prompt")
     compile_p.add_argument("source")
     compile_p.add_argument("-o", "--output", required=True)
-    compile_p.add_argument("--api-base", required=True)
+    compile_p.add_argument(
+        "--backend",
+        default="openai-compatible",
+        help="registered compiler backend identifier (default: openai-compatible)",
+    )
+    compile_p.add_argument(
+        "--api-base",
+        help="provider API base URL; required by the openai-compatible backend",
+    )
     compile_p.add_argument("--api-key-env", default="PAIC_API_KEY")
     compile_p.add_argument("--map-model", required=True)
     compile_p.add_argument("--final-model", required=True)
