@@ -118,12 +118,15 @@ def cmd_bundle(args) -> int:
 
 def cmd_checkpoint(args) -> int:
     conv = load_conversation(args.source)
-    result = build_extractive_checkpoint(
-        conv,
-        budget_tokens=args.budget,
-        profile=args.profile,
-        chars_per_token=args.chars_per_token,
-    )
+    try:
+        result = build_extractive_checkpoint(
+            conv,
+            budget_tokens=args.budget,
+            profile=args.profile,
+            chars_per_token=args.chars_per_token,
+        )
+    except ValueError as exc:
+        raise PortableAIContextError(str(exc)) from exc
     out = Path(args.output)
     out.mkdir(parents=True, exist_ok=True)
     checkpoint_path = out / "CHECKPOINT.md"
