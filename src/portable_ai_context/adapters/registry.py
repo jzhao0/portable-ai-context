@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from pathlib import Path
+import zlib
 
-from portable_ai_context.errors import UnsupportedSourceError
+from portable_ai_context.errors import ParseError, UnsupportedSourceError
 from portable_ai_context.models import Conversation
 from portable_ai_context.utils import read_text
 from . import aicb, chatgpt_share, chatgpt_html, claude_json, clean_html, compact_txt, gemini_activity_json, jsonl
@@ -18,7 +19,14 @@ def load_conversation(source: str) -> Conversation:
 
     suffix = path.suffix.lower()
     if suffix == ".aicb":
-        return aicb.load(str(path))
+        try:
+            return aicb.load(str(path))
+        except ParseError:
+            raise
+        except (OSError, zlib.error) as exc:
+            raise ParseError(
+                "AICB bundle contract violation: archive could not be read safely"
+            ) from exc
 
     text = read_text(path)
 
