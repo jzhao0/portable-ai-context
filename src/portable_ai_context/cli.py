@@ -23,6 +23,7 @@ from .conformance import inspect_conformance
 from .errors import PortableAIContextError
 from .exporters import write_bundle, write_standard
 from .integrity import inspect as inspect_integrity
+from .mcp_server import run_mcp_stdio
 from .privacy import inspect_conversation
 from .redaction import write_redaction_review
 
@@ -236,6 +237,11 @@ def cmd_compile(args) -> int:
     return 0
 
 
+def cmd_mcp(args) -> int:
+    run_mcp_stdio(args.root)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="paic", description="Portable AI Context")
     p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
@@ -388,6 +394,17 @@ def build_parser() -> argparse.ArgumentParser:
     compile_p.add_argument("--state")
     compile_p.add_argument("--timeout", type=_positive_int, default=300)
     compile_p.set_defaults(func=cmd_compile)
+
+    mcp_p = sub.add_parser(
+        "mcp",
+        help="run the optional root-confined MCP server over stdio",
+    )
+    mcp_p.add_argument(
+        "--root",
+        required=True,
+        help="explicit local workspace root exposed to PAIC MCP tools",
+    )
+    mcp_p.set_defaults(func=cmd_mcp)
 
     return p
 
