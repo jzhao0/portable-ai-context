@@ -67,11 +67,11 @@ Content-Type: application/json
 x-goog-api-key: <resolved key>
 ```
 
-The request body is equivalent to:
+The raw REST request body is equivalent to:
 
 ```json
 {
-  "systemInstruction": {
+  "system_instruction": {
     "parts": [{"text": "<compiler system prompt>"}]
   },
   "contents": [
@@ -88,6 +88,8 @@ The request body is equivalent to:
   }
 }
 ```
+
+The snake-case `system_instruction` spelling deliberately follows Google's current raw REST example rather than an SDK/object-language spelling.
 
 No tools, grounding, search, streaming, structured output, media, caching, or thought-summary option is enabled.
 
@@ -139,6 +141,8 @@ PAIC reads `candidate.content.parts` in order and joins only string `text` parts
 ```json
 {"thought": true}
 ```
+
+The optional `thought` metadata must be a boolean when present. A malformed non-boolean value fails the response-shape check rather than being treated as ordinary final text.
 
 Thought-summary text is deliberately excluded. `thoughtSignature`, function/tool payloads, media data, and other non-text fields are not converted into migration content.
 
