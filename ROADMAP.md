@@ -37,7 +37,7 @@
 - [ ] Anthropic backend
 - [ ] Gemini backend
 - [ ] Ollama / local model backend
-- [ ] Deterministic no-AI extractive checkpoint mode
+- [x] Deterministic no-AI extractive checkpoint mode (#27)
 
 ## v0.4 — Capture UX
 
