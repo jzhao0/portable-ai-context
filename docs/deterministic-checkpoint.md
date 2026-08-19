@@ -96,6 +96,8 @@ A selected long message can be shortened only when necessary to satisfy the conf
 
 A truncated selected message must retain actual source-derived characters in addition to the omission marker. If the current phase budget cannot fit a minimum useful excerpt, that candidate is skipped instead of emitting an omission-only placeholder.
 
+Excerpting operates on the derived, secret-redacted text, so the omitted-character count describes characters omitted from that safe rendered form rather than reconstructing the exact original-secret character count.
+
 The report records `truncated_message_count`.
 
 ## Derived-artifact secret redaction
@@ -117,7 +119,7 @@ Replacement markers look like:
 [REDACTED:private_key_material]
 ```
 
-`checkpoint-report.json` records only category counts. It never records matched secret values.
+`checkpoint-report.json` records only the **actual replacement counts across selected messages that can enter `CHECKPOINT.md`**. Secret-like patterns found only in unselected source messages are not reported as checkpoint redactions. The report never records matched secret values.
 
 ### Important limitation
 
