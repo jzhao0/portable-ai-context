@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 import re
 
+from portable_ai_context.compact_format import FORMAT_HEADER, unescape_message_text
 from portable_ai_context.errors import ParseError
 from portable_ai_context.models import Conversation, Message, SourceInfo
 from portable_ai_context.utils import source_fingerprint
@@ -16,8 +17,11 @@ def can_load(text: str) -> bool:
 
 
 def load(source: str, text: str) -> Conversation:
+    header_lines = text.splitlines()[:20]
+    compact_v1 = FORMAT_HEADER in header_lines
+
     title = ""
-    for line in text.splitlines()[:20]:
+    for line in header_lines:
         if line.startswith("TITLE:"):
             title = line[len("TITLE:"):].strip()
             break
@@ -28,6 +32,8 @@ def load(source: str, text: str) -> Conversation:
         start = match.end()
         end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
         body = text[start:end].strip()
+        if compact_v1 and body:
+            body = unescape_message_text(body)
         if body:
             messages.append(
                 Message(role=match.group(1).lower(), text=body, index=len(messages))
@@ -43,5 +49,6 @@ def load(source: str, text: str) -> Conversation:
             kind="compact_txt",
             locator=str(Path(source)),
             fingerprint=source_fingerprint(text),
+            metadata={"format": "paic-compact-v1" if compact_v1 else "legacy-marker-text"},
         ),
     )
