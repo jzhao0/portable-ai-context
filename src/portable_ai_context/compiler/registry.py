@@ -12,6 +12,11 @@ from .anthropic import (
     DEFAULT_ANTHROPIC_MAX_TOKENS,
 )
 from .base import CompilerBackend
+from .gemini import (
+    DEFAULT_GEMINI_API_BASE,
+    DEFAULT_GEMINI_MAX_OUTPUT_TOKENS,
+    GeminiBackend,
+)
 from .openai_compatible import OpenAICompatibleBackend
 
 
@@ -132,5 +137,29 @@ def _anthropic_factory(config: BackendConfig) -> CompilerBackend:
     )
 
 
+def _gemini_factory(config: BackendConfig) -> CompilerBackend:
+    api_base = config.api_base if config.api_base is not None else DEFAULT_GEMINI_API_BASE
+    if not isinstance(api_base, str) or not api_base.strip():
+        raise CompilerError("gemini backend API base is invalid")
+
+    max_output_tokens = config.options.get(
+        "gemini_max_output_tokens", DEFAULT_GEMINI_MAX_OUTPUT_TOKENS
+    )
+    if (
+        not isinstance(max_output_tokens, int)
+        or isinstance(max_output_tokens, bool)
+        or max_output_tokens <= 0
+    ):
+        raise CompilerError("gemini maxOutputTokens must be a positive integer")
+
+    return GeminiBackend(
+        api_base=api_base,
+        api_key=_resolve_api_key(config),
+        max_output_tokens=max_output_tokens,
+        timeout=_validate_timeout(config),
+    )
+
+
 register_backend("anthropic", _anthropic_factory)
+register_backend("gemini", _gemini_factory)
 register_backend("openai-compatible", _openai_compatible_factory)
