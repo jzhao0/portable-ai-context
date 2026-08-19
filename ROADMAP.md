@@ -46,7 +46,7 @@
 - [x] Chromium browser extension MVP
 - [x] Message-count + last-user/assistant preview before browser download
 - [ ] Separate Chrome and Brave live smoke validation
-- [ ] Firefox runtime/package validation
+- [ ] Firefox runtime/package validation (#64)
 - [x] Broader snapshot completeness UI (#62)
 - [x] Pattern-limited body-secret redaction review (#43)
 

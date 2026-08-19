@@ -28,6 +28,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - name: Install build tooling
         run: python -m pip install --upgrade pip build
       - name: Build wheel and sdist
@@ -74,5 +77,11 @@ jobs:
           PY
       - name: Smoke optional MCP extra with official in-memory client
         run: .package-smoke-venv/bin/python tools/mcp_smoke.py
-      - name: Require wheel and sdist artifacts
-        run: test -n "$(find dist -maxdepth 1 -name '*.whl' -print -quit)" && test -n "$(find dist -maxdepth 1 -name '*.tar.gz' -print -quit)"
+      - name: Lint Firefox MV3 extension with pinned Mozilla web-ext
+        run: npx --yes web-ext@10.5.0 lint --source-dir extension --warnings-as-errors --boring
+      - name: Build Firefox extension package with pinned Mozilla web-ext
+        run: npx --yes web-ext@10.5.0 build --source-dir extension --artifacts-dir firefox-extension-dist --filename paic-firefox-extension.zip --overwrite-dest
+      - name: Independently verify Firefox package security shape
+        run: python tools/firefox_extension_package_smoke.py firefox-extension-dist
+      - name: Require wheel, sdist, and Firefox package artifacts
+        run: test -n "$(find dist -maxdepth 1 -name '*.whl' -print -quit)" && test -n "$(find dist -maxdepth 1 -name '*.tar.gz' -print -quit)" && test -n "$(find firefox-extension-dist -maxdepth 1 -name '*.zip' -print -quit)"
