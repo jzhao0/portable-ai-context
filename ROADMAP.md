@@ -48,7 +48,7 @@
 - [ ] Separate Chrome and Brave live smoke validation
 - [ ] Firefox runtime/package validation
 - [ ] Broader snapshot completeness UI
-- [ ] Optional body-secret redaction review
+- [x] Pattern-limited body-secret redaction review (#43)
 
 ## v0.5 — Handoff integrations
 
