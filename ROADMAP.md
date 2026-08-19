@@ -35,7 +35,7 @@
 - [x] Lite / Standard / Full migration profiles
 - [ ] Bundled model-specific exact tokenizers
 - [x] Pluggable compiler backend registry / CLI boundary (#31)
-- [ ] Anthropic backend
+- [x] Anthropic Messages backend (#33)
 - [ ] Gemini backend
 - [ ] Ollama / local model backend
 - [x] Deterministic no-AI extractive checkpoint mode (#27)
