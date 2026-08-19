@@ -8,7 +8,7 @@ from .compiler.budget import CharacterTokenCounter, TokenCounter, resolve_budget
 from .conformance import inspect_conformance
 from .errors import PortableAIContextError
 from .integrity import inspect as inspect_integrity, message_hash
-from .models import Conversation, Message
+from .models import Conversation
 from .privacy import BODY_PATTERNS
 from .utils import normalize_text
 
@@ -16,6 +16,7 @@ from .utils import normalize_text
 POLICY_VERSION = "deterministic-extractive-v1"
 DEFAULT_PROFILE = "standard"
 MIN_BUDGET_TOKENS = 512
+MIN_EXCERPT_CHARS = 64
 OMISSION_LABEL = "PAIC DETERMINISTIC OMISSION"
 
 _ENGLISH_STATE_RE = re.compile(
@@ -146,11 +147,7 @@ def _sort_reasons(reasons: Iterable[str]) -> tuple[str, ...]:
 def _excerpt_text(text: str, keep_chars: int) -> tuple[str, bool]:
     if keep_chars >= len(text):
         return text, False
-    keep_chars = max(0, keep_chars)
-    if keep_chars == 0:
-        omitted = len(text)
-        return f"[{OMISSION_LABEL}: {omitted} CHARACTERS OMITTED]", True
-
+    keep_chars = max(1, keep_chars)
     head_chars = max(1, int(keep_chars * 0.7))
     tail_chars = max(0, keep_chars - head_chars)
     omitted = max(0, len(text) - head_chars - tail_chars)
@@ -251,8 +248,11 @@ def _fit_candidate(
     if full_ok:
         return full_candidate
 
-    low = 0
-    high = max(0, len(prepared.text) - 1)
+    if len(prepared.text) <= MIN_EXCERPT_CHARS:
+        return None
+
+    low = MIN_EXCERPT_CHARS
+    high = len(prepared.text) - 1
     best: _SelectedMessage | None = None
     while low <= high:
         middle = (low + high) // 2
@@ -329,7 +329,7 @@ def build_extractive_checkpoint(
     selected: dict[int, _SelectedMessage] = {}
     pin_total = _phase_token_limit(available, 0.50)
     per_pin = max(64, pin_total // max(1, len(pin_reasons)))
-    pin_order = []
+    pin_order: list[int] = []
     for index in (latest_user, latest_assistant, first_user):
         if index is not None and index not in pin_order:
             pin_order.append(index)
