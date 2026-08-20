@@ -161,10 +161,77 @@ jobs:
           .published-smoke-venv/bin/python -m pip install --no-cache-dir "portable-ai-context==${{ needs.build.outputs.version }}"
           .published-smoke-venv/bin/python tools/package_smoke.py
 
-  github-release:
-    name: Create GitHub Release after PyPI verification
+  attest-published:
+    name: Attest verified published artifacts
     if: ${{ inputs.mode == 'publish' }}
     needs: [build, verify-published]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - name: Download original build artifacts and checksums
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-dists-${{ inputs.release_tag }}
+          path: release-artifacts
+      - name: Validate original artifact set and checksums before attestation
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          NORMALIZED_VERSION="${VERSION//-/_}"
+          WHEEL="portable_ai_context-${NORMALIZED_VERSION}-py3-none-any.whl"
+          SDIST="portable_ai_context-${NORMALIZED_VERSION}.tar.gz"
+
+          mapfile -t ACTUAL_FILES < <(find release-artifacts -type f -printf '%P\n' | sort)
+          mapfile -t EXPECTED_FILES < <(printf '%s\n' "SHA256SUMS" "dist/$WHEEL" "dist/$SDIST" | sort)
+          test "${#ACTUAL_FILES[@]}" -eq 3
+          diff -u <(printf '%s\n' "${EXPECTED_FILES[@]}") <(printf '%s\n' "${ACTUAL_FILES[@]}")
+
+          test "$(wc -l < release-artifacts/SHA256SUMS)" -eq 2
+          awk 'NF != 2 || $1 !~ /^[0-9a-f]{64}$/ { exit 1 }' release-artifacts/SHA256SUMS
+          mapfile -t ACTUAL_CHECKSUM_NAMES < <(awk '{print $2}' release-artifacts/SHA256SUMS | sort)
+          mapfile -t EXPECTED_CHECKSUM_NAMES < <(printf '%s\n' "$WHEEL" "$SDIST" | sort)
+          diff -u <(printf '%s\n' "${EXPECTED_CHECKSUM_NAMES[@]}") <(printf '%s\n' "${ACTUAL_CHECKSUM_NAMES[@]}")
+
+          (cd release-artifacts/dist && sha256sum -c ../SHA256SUMS)
+      - name: Require release tag to still point to the built commit before attestation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          EXPECTED_COMMIT: ${{ needs.build.outputs.commit }}
+        run: |
+          ACTUAL_COMMIT="$(gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_TAG" --jq .sha)"
+          test "$ACTUAL_COMMIT" = "$EXPECTED_COMMIT"
+      - name: Generate GitHub artifact provenance attestations
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
+        with:
+          subject-path: |
+            release-artifacts/dist/*.whl
+            release-artifacts/dist/*.tar.gz
+            release-artifacts/SHA256SUMS
+          create-storage-record: false
+      - name: Verify generated artifact attestations
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for subject in \
+            release-artifacts/dist/*.whl \
+            release-artifacts/dist/*.tar.gz \
+            release-artifacts/SHA256SUMS
+          do
+            gh attestation verify "$subject" --repo "$GITHUB_REPOSITORY"
+          done
+
+  github-release:
+    name: Create GitHub Release after PyPI verification and provenance attestation
+    if: ${{ inputs.mode == 'publish' }}
+    needs: [build, verify-published, attest-published]
     runs-on: ubuntu-latest
     permissions:
       contents: write
