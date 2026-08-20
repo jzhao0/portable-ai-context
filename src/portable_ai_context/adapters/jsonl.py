@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from portable_ai_context.canonical_contract import CANONICAL_ROLES
 from portable_ai_context.errors import ParseError
 from portable_ai_context.models import Conversation, Message, SourceInfo
 from portable_ai_context.utils import source_fingerprint
@@ -26,7 +27,7 @@ def load(source: str, text: str) -> Conversation:
             continue
         role = obj.get("role")
         body = obj.get("text")
-        if role in {"user", "assistant"} and isinstance(body, str) and body.strip():
+        if role in CANONICAL_ROLES and isinstance(body, str) and body.strip():
             messages.append(Message(role=role, text=body, index=len(messages)))
 
     if not messages:
