@@ -8,6 +8,10 @@ import stat
 from typing import Any
 import zipfile
 
+from portable_ai_context.bundle_contract import (
+    AICB_REQUIRED_MEMBERS,
+    AICB_SCHEMA_VERSION,
+)
 from portable_ai_context.errors import ParseError
 from portable_ai_context.integrity import inspect as inspect_integrity
 from portable_ai_context.models import Conversation, SourceInfo
@@ -15,11 +19,11 @@ from portable_ai_context.privacy import BODY_PATTERNS, inspect_conversation
 from . import jsonl
 
 
-SCHEMA_VERSION = "0.1-alpha"
+# Compatibility aliases retained for existing internal callers/tests. The
+# literals themselves live only in bundle_contract.py.
+SCHEMA_VERSION = AICB_SCHEMA_VERSION
+REQUIRED_MEMBERS = AICB_REQUIRED_MEMBERS
 SOURCE_KIND = "aicb"
-REQUIRED_MEMBERS = frozenset(
-    {"manifest.json", "conversation.jsonl", "integrity.json", "privacy.json"}
-)
 MAX_ARCHIVE_BYTES = 128 * 1024 * 1024
 MAX_MEMBER_BYTES = 96 * 1024 * 1024
 MAX_TOTAL_UNCOMPRESSED_BYTES = 128 * 1024 * 1024
