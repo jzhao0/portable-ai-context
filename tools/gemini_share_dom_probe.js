@@ -32,7 +32,10 @@
     if (typeof pathname !== "string") {
       return "<unavailable>";
     }
-    const segments = pathname.split("/").filter(Boolean).slice(0, MAX_ROUTE_SEGMENTS);
+    const segments = pathname.split("/").filter(Boolean);
+    if (segments.length > MAX_ROUTE_SEGMENTS) {
+      return "<route-too-deep>";
+    }
     if (!segments.length) {
       return "/";
     }
