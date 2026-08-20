@@ -68,4 +68,6 @@ Pre-v1 compatibility regression floor / historical `.aicb` golden specimen: #79.
 
 Future exact release-candidate 3-OS × Python-min/max smoke gate: #81. The v1 cross-platform release-matrix item remains incomplete until a real tagged release run records that evidence.
 
+Pre-v1 canonical role/text stream semantic floor / historical JSONL specimen: #83. This is preparation only and does not mark the stable canonical schema or final backward-compatibility policy complete.
+
 See [`docs/release-readiness-0.1.0a2.md`](docs/release-readiness-0.1.0a2.md) for the distinction between synthetic CI coverage and real live evidence.
