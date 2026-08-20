@@ -35,6 +35,15 @@ class CanonicalStreamCompatibilityFloorTests(unittest.TestCase):
         raw = FIXTURE.read_bytes()
         self.assertEqual(hashlib.sha256(raw).hexdigest(), GOLDEN_FILE_SHA256)
 
+    def test_gitattributes_pins_historical_jsonl_to_lf_on_every_checkout(self):
+        attributes = (ROOT / ".gitattributes").read_text(encoding="utf-8").splitlines()
+        self.assertIn(
+            "tests/fixtures/canonical_role_text_golden.jsonl text eol=lf",
+            attributes,
+        )
+        raw = FIXTURE.read_bytes()
+        self.assertNotIn(b"\r\n", raw)
+
     def test_historical_jsonl_loads_without_current_exporter_generation(self):
         conversation = load_conversation(str(FIXTURE))
         self.assertEqual(conversation.source.kind, "jsonl")
