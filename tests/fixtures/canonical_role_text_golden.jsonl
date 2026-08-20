@@ -1,0 +1,4 @@
+{"role":"user","text":"Golden canonical question."}
+{"role":"assistant","text":"Golden canonical answer."}
+{"role":"user","text":"Golden canonical follow-up.\nLine two."}
+{"role":"assistant","text":"Golden canonical final."}
