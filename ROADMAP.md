@@ -66,4 +66,6 @@
 
 Pre-v1 compatibility regression floor / historical `.aicb` golden specimen: #79. This is preparation only and does not mark the stable-format or long-term compatibility policy complete.
 
+Future exact release-candidate 3-OS × Python-min/max smoke gate: #81. The v1 cross-platform release-matrix item remains incomplete until a real tagged release run records that evidence.
+
 See [`docs/release-readiness-0.1.0a2.md`](docs/release-readiness-0.1.0a2.md) for the distinction between synthetic CI coverage and real live evidence.

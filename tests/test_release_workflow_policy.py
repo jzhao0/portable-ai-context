@@ -26,6 +26,52 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         self.assertIn("default: dry-run", self.text)
         self.assertIn("inputs.mode == 'publish'", self.text)
 
+    def test_candidate_smoke_matrix_is_three_os_by_min_and_max_python(self):
+        job = self._job("candidate-smoke", "prepublish-tag-check")
+        self.assertIn("needs: build", job)
+        self.assertIn("fail-fast: false", job)
+        self.assertIn("os: [ubuntu-latest, windows-latest, macos-latest]", job)
+        self.assertIn("python-version: ['3.10', '3.13']", job)
+        self.assertIn("runs-on: ${{ matrix.os }}", job)
+        self.assertIn("python-version: ${{ matrix.python-version }}", job)
+        self.assertNotIn("inputs.mode == 'publish'", job)
+        self.assertNotIn("if: ${{", job)
+
+    def test_candidate_smoke_uses_exact_build_commit_and_original_artifact(self):
+        job = self._job("candidate-smoke", "prepublish-tag-check")
+        self.assertIn("ref: ${{ needs.build.outputs.commit }}", job)
+        self.assertIn("fetch-depth: 1", job)
+        self.assertIn("persist-credentials: false", job)
+        self.assertIn(
+            "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1",
+            job,
+        )
+        self.assertIn("name: release-dists-${{ inputs.release_tag }}", job)
+        self.assertIn("path: release-artifacts", job)
+        self.assertNotIn("python -m build", job)
+        self.assertNotIn("actions/upload-artifact", job)
+
+    def test_candidate_smoke_verifies_read_only_then_installs_exact_wheel(self):
+        job = self._job("candidate-smoke", "prepublish-tag-check")
+        verify_position = job.index("python tools/verify_release_candidate.py")
+        install_position = job.index("pip', 'install'")
+        smoke_position = job.index("python tools/package_smoke.py")
+        self.assertLess(verify_position, install_position)
+        self.assertLess(install_position, smoke_position)
+        self.assertIn('--version "${{ needs.build.outputs.version }}"', job)
+        self.assertIn("--artifacts-dir release-artifacts/dist", job)
+        self.assertIn("--checksums release-artifacts/SHA256SUMS", job)
+        self.assertIn("glob('*.whl')", job)
+        self.assertIn("assert len(wheels) == 1", job)
+        self.assertIn("'--no-deps', '--force-reinstall'", job)
+        self.assertNotIn("pip install portable-ai-context", job)
+
+    def test_candidate_matrix_gates_prepublish_and_pypi(self):
+        prepublish_job = self._job("prepublish-tag-check", "pypi-publish")
+        publish_job = self._job("pypi-publish", "verify-published")
+        self.assertIn("needs: [build, candidate-smoke]", prepublish_job)
+        self.assertIn("needs: [build, candidate-smoke, prepublish-tag-check]", publish_job)
+
     def test_oidc_permissions_are_scoped_to_publish_and_attestation_jobs(self):
         self.assertEqual(self.text.count("id-token: write"), 2)
         self.assertIn("environment:\n      name: pypi", self.text)
@@ -50,7 +96,7 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
 
     def test_publish_job_has_only_pinned_artifact_download_and_pypi_action(self):
         publish_job = self._job("pypi-publish", "verify-published")
-        self.assertIn("needs: [build, prepublish-tag-check]", publish_job)
+        self.assertIn("needs: [build, candidate-smoke, prepublish-tag-check]", publish_job)
         self.assertIn(
             "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1",
             publish_job,
@@ -63,7 +109,7 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         self.assertNotIn("run:", publish_job)
 
     def test_checkout_credentials_are_not_persisted(self):
-        self.assertEqual(self.text.count("persist-credentials: false"), 3)
+        self.assertEqual(self.text.count("persist-credentials: false"), 4)
 
     def test_tagged_commit_must_be_in_main_history(self):
         self.assertIn("git merge-base --is-ancestor HEAD origin/main", self.text)
