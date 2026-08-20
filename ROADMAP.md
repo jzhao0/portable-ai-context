@@ -70,4 +70,6 @@ Future exact release-candidate 3-OS × Python-min/max smoke gate: #81. The v1 cr
 
 Pre-v1 canonical role/text stream semantic floor / historical JSONL specimen: #83. This is preparation only and does not mark the stable canonical schema or final backward-compatibility policy complete.
 
+Pre-v1 installed package / Python `__all__` / semantic CLI surface inventory: #85. This is a review gate for alpha surface drift, not a stable-API guarantee; the final backward-compatibility policy remains incomplete.
+
 See [`docs/release-readiness-0.1.0a2.md`](docs/release-readiness-0.1.0a2.md) for the distinction between synthetic CI coverage and real live evidence.

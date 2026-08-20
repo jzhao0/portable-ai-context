@@ -1,0 +1,559 @@
+{
+  "cli": {
+    "program": "paic",
+    "subcommands": {
+      "bundle": {
+        "options": [
+          {
+            "choices": null,
+            "default": null,
+            "dest": "output",
+            "kind": "store",
+            "nargs": null,
+            "option_strings": [
+              "--output",
+              "-o"
+            ],
+            "required": true,
+            "type": null
+          }
+        ],
+        "positionals": [
+          {
+            "choices": null,
+            "default": null,
+            "dest": "source",
+            "kind": "store",
+            "nargs": null,
+            "required": true,
+            "type": null
+          }
+        ]
+      },
+      "checkpoint": {
+        "options": [
+          {
+            "choices": null,
+            "default": null,
+            "dest": "budget",
+            "kind": "store",
+            "nargs": null,
+            "option_strings": [
+              "--budget"
+            ],
+            "required": false,
+            "type": "_checkpoint_budget"
+          },
+          {
+            "choices": null,
+            "default": 4.0,
+            "dest": "chars_per_token",
+            "kind": "store",
+            "nargs": null,
+            "option_strings": [
+              "--chars-per-token"
+            ],
+            "required": false,
+            "type": "_positive_float"
+          },
+          {
+            "choices": null,
+            "default": null,
+            "dest": "output",
+            "kind": "store",
+            "nargs": null,
+            "option_strings": [
+              "--output",
+              "-o"
+            ],
+            "required": true,
+            "type": null
+          },
+          {
+            "choices": [
+              "lite",
+              "standard",
+              "full"
+            ],
+            "default": null,
+            "dest": "profile",
+            "kind": "store",
+            "nargs": null,
+            "option_strings": [
+              "--profile"
+            ],
+            "required": false,
+            "type": null
+          }
+        ],
+        "positionals": [
+          {
+            "choices": null,
+            "default": null,
+            "dest": "source",
+            "kind": "store",
+            "nargs": null,
+            "required": true,
+            "type": null
+          }
+        ]
+      },
+      "compile": {
+        "options": [
+          {
+            "choices": null,
+            "default": 4096,
+            "dest": "anthropic_max_tokens",
+            "kind": "store",
+            "nargs": null,
+            "option_strings": [
+              "--anthropic-max-tokens"
+            ],
+            "required": false,
+            "type": "_positive_int"
+          },
+          {
+            "choices": null,
+            "default": null,
+            "dest": "api_base",
+            "kind": "store",
+            "nargs": null,
+            "option_strings": [
+              "--api-base"
+            ],
+            "required": false,
+            "type": null
+          },
+          {
+            "choices": null,
+            "default": "PAIC_API_KEY",
+            "dest": "api_key_env",
+            "kind": "store",
+            "nargs": null,
+            "option_strings": [
+              "--api-key-env"
+            ],
+            "required": false,
+            "type": null
+          },
+          {
+            "choices": null,
+            "default": "openai-compatible",
+            "dest": "backend",
+            "kind": "store",
+            "nargs": null,
+            "option_strings": [
+              "--backend"
+            ],
+            "required": false,
+            "type": null
+          },
+          {
+            "choices": null,
+            "default": null,
+            "dest": "budget",
+            "kind": "store",
+            "nargs": null,
+            "option_strings": [
+              "--budget"
+            ],
+            "required": false,
+            "type": "_positive_int"
+          },
+          {
+            "choices": null,
+            "default": 4.0,
+            "dest": "chars_per_token",
+            "kind": "store",
+            "nargs": null,
+            "option_strings": [
+              "--chars-per-token"
+            ],
+            "required": false,
+            "type": "_positive_float"
+          },
+          {
+            "choices": null,
+            "default": 120000,
+            "dest": "chunk_chars",
+            "kind": "store",
+            "nargs": null,
+            "option_strings": [
+              "--chunk-chars"
+            ],
+            "required": false,
+            "type": "_positive_int"
+          },
+          {
+            "choices": null,
+            "default": null,
+            "dest": "final_model",
+            "kind": "store",
+            "nargs": null,
+            "option_strings": [
+              "--final-model"
+            ],
+            "required": true,
+            "type": null
+          },
+          {
+            "choices": null,
+            "default": 4096,
+            "dest": "gemini_max_output_tokens",
+            "kind": "store",
+            "nargs": null,
+            "option_strings": [
+              "--gemini-max-output-tokens"
+            ],
+            "required": false,
+            "type": "_positive_int"
+          },
+          {
+            "choices": null,
+            "default": null,
+            "dest": "map_model",
+            "kind": "store",
+            "nargs": null,
+            "option_strings": [
+              "--map-model"
+            ],
+            "required": true,
+            "type": null
+          },
+          {
+            "choices": null,
+            "default": null,
+            "dest": "ollama_api_key_env",
+            "kind": "store",
+            "nargs": null,
+            "option_strings": [
+              "--ollama-api-key-env"
+            ],
+            "required": false,
+            "type": null
+          },
+          {
+            "choices": null,
+            "default": 4096,
+            "dest": "ollama_num_predict",
+            "kind": "store",
+            "nargs": null,
+            "option_strings": [
+              "--ollama-num-predict"
+            ],
+            "required": false,
+            "type": "_positive_int"
+          },
+          {
+            "choices": null,
+            "default": null,
+            "dest": "output",
+            "kind": "store",
+            "nargs": null,
+            "option_strings": [
+              "--output",
+              "-o"
+            ],
+            "required": true,
+            "type": null
+          },
+          {
+            "choices": [
+              "lite",
+              "standard",
+              "full"
+            ],
+            "default": null,
+            "dest": "profile",
+            "kind": "store",
+            "nargs": null,
+            "option_strings": [
+              "--profile"
+            ],
+            "required": false,
+            "type": null
+          },
+          {
+            "choices": null,
+            "default": 180000,
+            "dest": "reduce_chars",
+            "kind": "store",
+            "nargs": null,
+            "option_strings": [
+              "--reduce-chars"
+            ],
+            "required": false,
+            "type": "_positive_int"
+          },
+          {
+            "choices": null,
+            "default": null,
+            "dest": "state",
+            "kind": "store",
+            "nargs": null,
+            "option_strings": [
+              "--state"
+            ],
+            "required": false,
+            "type": null
+          },
+          {
+            "choices": null,
+            "default": null,
+            "dest": "tiktoken_encoding",
+            "kind": "store",
+            "nargs": null,
+            "option_strings": [
+              "--tiktoken-encoding"
+            ],
+            "required": false,
+            "type": null
+          },
+          {
+            "choices": null,
+            "default": 300,
+            "dest": "timeout",
+            "kind": "store",
+            "nargs": null,
+            "option_strings": [
+              "--timeout"
+            ],
+            "required": false,
+            "type": "_positive_int"
+          },
+          {
+            "choices": [
+              "character",
+              "tiktoken",
+              "provider-native"
+            ],
+            "default": "character",
+            "dest": "token_counter",
+            "kind": "store",
+            "nargs": null,
+            "option_strings": [
+              "--token-counter"
+            ],
+            "required": false,
+            "type": null
+          },
+          {
+            "choices": null,
+            "default": null,
+            "dest": "tokenizer_model",
+            "kind": "store",
+            "nargs": null,
+            "option_strings": [
+              "--tokenizer-model"
+            ],
+            "required": false,
+            "type": null
+          }
+        ],
+        "positionals": [
+          {
+            "choices": null,
+            "default": null,
+            "dest": "source",
+            "kind": "store",
+            "nargs": null,
+            "required": true,
+            "type": null
+          }
+        ]
+      },
+      "conform": {
+        "options": [],
+        "positionals": [
+          {
+            "choices": null,
+            "default": null,
+            "dest": "source",
+            "kind": "store",
+            "nargs": null,
+            "required": true,
+            "type": null
+          }
+        ]
+      },
+      "extract": {
+        "options": [
+          {
+            "choices": null,
+            "default": null,
+            "dest": "output",
+            "kind": "store",
+            "nargs": null,
+            "option_strings": [
+              "--output",
+              "-o"
+            ],
+            "required": true,
+            "type": null
+          }
+        ],
+        "positionals": [
+          {
+            "choices": null,
+            "default": null,
+            "dest": "source",
+            "kind": "store",
+            "nargs": null,
+            "required": true,
+            "type": null
+          }
+        ]
+      },
+      "inspect": {
+        "options": [],
+        "positionals": [
+          {
+            "choices": null,
+            "default": null,
+            "dest": "source",
+            "kind": "store",
+            "nargs": null,
+            "required": true,
+            "type": null
+          }
+        ]
+      },
+      "mcp": {
+        "options": [
+          {
+            "choices": null,
+            "default": null,
+            "dest": "root",
+            "kind": "store",
+            "nargs": null,
+            "option_strings": [
+              "--root"
+            ],
+            "required": true,
+            "type": null
+          }
+        ],
+        "positionals": []
+      },
+      "redact": {
+        "options": [
+          {
+            "choices": null,
+            "default": null,
+            "dest": "output",
+            "kind": "store",
+            "nargs": null,
+            "option_strings": [
+              "--output",
+              "-o"
+            ],
+            "required": true,
+            "type": null
+          }
+        ],
+        "positionals": [
+          {
+            "choices": null,
+            "default": null,
+            "dest": "source",
+            "kind": "store",
+            "nargs": null,
+            "required": true,
+            "type": null
+          }
+        ]
+      },
+      "smoke": {
+        "options": [],
+        "positionals": [
+          {
+            "choices": null,
+            "default": null,
+            "dest": "source",
+            "kind": "store",
+            "nargs": null,
+            "required": true,
+            "type": null
+          }
+        ]
+      },
+      "verify": {
+        "options": [
+          {
+            "choices": null,
+            "default": false,
+            "dest": "show_tail",
+            "kind": "store_true",
+            "nargs": 0,
+            "option_strings": [
+              "--show-tail"
+            ],
+            "required": false,
+            "type": null
+          }
+        ],
+        "positionals": [
+          {
+            "choices": null,
+            "default": null,
+            "dest": "source",
+            "kind": "store",
+            "nargs": null,
+            "required": true,
+            "type": null
+          }
+        ]
+      }
+    },
+    "version_option_strings": [
+      "--version"
+    ]
+  },
+  "inventory_schema": "paic-public-surface-inventory-1",
+  "package": {
+    "console_scripts": {
+      "paic": "portable_ai_context.cli:main"
+    },
+    "distribution_name": "portable-ai-context",
+    "optional_extras": [
+      "mcp",
+      "tokenizers"
+    ],
+    "requires_python": ">=3.10"
+  },
+  "python_api": {
+    "portable_ai_context": [
+      "Conversation",
+      "Message",
+      "SnapshotInfo",
+      "SourceInfo"
+    ],
+    "portable_ai_context.compiler": [
+      "ANTHROPIC_API_VERSION",
+      "AnthropicBackend",
+      "BackendConfig",
+      "CallableTokenCounter",
+      "CharacterTokenCounter",
+      "CompilationReport",
+      "CompilationResult",
+      "CompilerBackend",
+      "DEFAULT_ANTHROPIC_API_BASE",
+      "DEFAULT_ANTHROPIC_MAX_TOKENS",
+      "DEFAULT_GEMINI_API_BASE",
+      "DEFAULT_GEMINI_MAX_OUTPUT_TOKENS",
+      "DEFAULT_OLLAMA_API_BASE",
+      "DEFAULT_OLLAMA_NUM_PREDICT",
+      "GeminiBackend",
+      "OllamaBackend",
+      "OpenAICompatibleBackend",
+      "PROFILE_BUDGETS",
+      "ProviderNativeTokenCounter",
+      "TiktokenTokenCounter",
+      "TokenCounter",
+      "available_backends",
+      "compile_migration",
+      "create_backend",
+      "register_backend"
+    ]
+  }
+}
