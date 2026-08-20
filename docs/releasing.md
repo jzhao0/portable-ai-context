@@ -36,19 +36,89 @@ The workflow checks out the existing release tag with full Git history and build
 The build job:
 
 1. validates tag/version/changelog state;
-2. builds wheel + sdist;
+2. builds wheel + sdist once on the controlled Ubuntu build runner;
 3. runs `twine check`;
 4. requires exactly the expected wheel and sdist filenames;
 5. generates `SHA256SUMS`;
 6. installs only the built wheel into an isolated virtual environment;
 7. runs the installed-distribution package smoke;
-8. uploads the verified build products as a short-lived GitHub Actions artifact.
+8. uploads the verified build products as one short-lived GitHub Actions artifact.
 
-`dry-run` stops after this stage. It does not upload to PyPI, mint a final-release GitHub provenance attestation, or create a GitHub Release.
+The release workflow does **not** rebuild separate distributions on Windows or macOS. The same retained wheel/sdist/checksum bytes become the release candidate for every later gate.
+
+## Exact cross-platform release-candidate smoke
+
+After the build artifact exists, the `candidate-smoke` job expands to this six-child matrix:
+
+```text
+ubuntu-latest  × Python 3.10
+ubuntu-latest  × Python 3.13
+windows-latest × Python 3.10
+windows-latest × Python 3.13
+macos-latest   × Python 3.10
+macos-latest   × Python 3.13
+```
+
+Every child:
+
+1. checks out the exact immutable build commit only to obtain reviewed smoke tooling;
+2. downloads the original `release-dists-${release_tag}` artifact;
+3. runs `tools/verify_release_candidate.py` against the retained `dist/` files and `SHA256SUMS`;
+4. requires exactly the version-derived `py3-none-any` wheel and sdist names;
+5. recomputes both SHA256 values without modifying the candidate files or checksum file;
+6. installs that exact retained wheel with `pip --no-deps --force-reinstall` into the disposable runner Python;
+7. runs `tools/package_smoke.py` against the installed distribution.
+
+`package_smoke.py` independently checks that the installed distribution version, package `__version__`, and `paic --version` agree with the checked-out tagged source version and that imports resolve from installed `site-packages` rather than the repository source tree.
+
+`strategy.fail-fast` is disabled so one platform failure does not erase evidence from the other matrix children.
+
+This is deliberately a **candidate-byte validation matrix**, not a six-build matrix. A passing result means the same candidate wheel retained from the build job installed and passed PAIC's package smoke on every matrix target.
+
+`prepublish-tag-check` depends on the entire matrix, and PyPI publishing depends on both the matrix and the tag check. No candidate-smoke child has OIDC publishing, attestation, or repository-write permission.
+
+### Evidence boundary
+
+The matrix implementation can be reviewed and unit/static-tested in ordinary pull-request CI. That does **not** prove that a tagged release candidate has already passed the matrix.
+
+The v1 Roadmap item `Cross-platform release matrix` remains incomplete until an intended future release runs the tagged `Release alpha` workflow and records a successful six-child candidate matrix under the actual release procedure.
+
+The already-published `v0.1.0a2` release is not retroactively represented as having passed this future gate.
+
+## Read-only retained-candidate verification
+
+`tools/verify_release_candidate.py` is separate from `tools/release_guard.py` because their write authorities differ:
+
+- `release_guard.py --artifacts-dir ... --checksums ...` belongs to the build job and **creates** `SHA256SUMS`;
+- `verify_release_candidate.py` belongs to downstream verification and is strictly read-only.
+
+The read-only verifier requires:
+
+- an alpha version in `X.Y.ZaN` form;
+- exactly the expected wheel and sdist in the candidate `dist/` directory;
+- exactly two non-empty checksum entries;
+- lowercase 64-hex SHA256 values;
+- safe flat version-derived artifact filenames with no path separators/traversal;
+- exact checksum filename-set equality with the expected candidate;
+- recomputed hashes equal to the recorded hashes.
+
+It does not rewrite, normalize, repair, rename, or regenerate any candidate artifact.
+
+## Dry-run boundary
+
+A dry-run still executes the tagged build **and the full six-child candidate matrix**. It stops only after those candidate validations succeed.
+
+Dry-run does not:
+
+- enter the protected PyPI environment;
+- mint a PyPI publishing OIDC credential;
+- upload to PyPI;
+- create GitHub artifact provenance attestations;
+- create a GitHub Release.
 
 For a real publish, the build commit SHA becomes the immutable workflow identity for later validation. The workflow rechecks that the requested release tag still resolves to that same build commit:
 
-- immediately before the PyPI publishing job;
+- after the candidate matrix and immediately before the PyPI publishing job;
 - immediately after PyPI publication, before hash/fresh-install verification;
 - after PyPI verification and immediately before GitHub artifact attestation;
 - immediately before creating the GitHub Release.
@@ -120,7 +190,7 @@ Recommended protections before a real publish:
 - protect `v*` tag creation/modification so ordinary contributors cannot create release identities;
 - keep the publishing job limited to artifact download + Trusted Publishing only.
 
-The PyPI publishing OIDC permission (`id-token: write`) exists only on the `pypi-publish` job. A separate post-publication attestation job has its own `id-token: write` plus `attestations: write` permission for GitHub provenance. Neither permission is granted to the build job, tag-continuity jobs, post-publication package verification job, or GitHub Release job.
+The PyPI publishing OIDC permission (`id-token: write`) exists only on the `pypi-publish` job. A separate post-publication attestation job has its own `id-token: write` plus `attestations: write` permission for GitHub provenance. Neither permission is granted to the build job, candidate-smoke matrix, tag-continuity jobs, post-publication package verification job, or GitHub Release job.
 
 ## Trusted publication and attestations
 
@@ -201,7 +271,9 @@ release_tag: v0.1.0a2
 mode:        dry-run
 ```
 
-A successful dry-run proves the tagged commit builds the exact expected wheel/sdist pair, produces checksums, and the built wheel passes an isolated install smoke. It does not mint a PyPI publishing OIDC credential, upload to PyPI, create a GitHub artifact attestation, or create a GitHub Release.
+A successful future dry-run proves that the tagged commit builds the exact expected wheel/sdist pair, records their checksums, and that the **same retained wheel bytes** pass package smoke on Ubuntu, Windows, and macOS at Python 3.10 and 3.13. It does not mint a PyPI publishing OIDC credential, upload to PyPI, create a GitHub artifact attestation, or create a GitHub Release.
+
+Do not retroactively infer this evidence for a release whose workflow ran before the candidate matrix existed.
 
 ## Publish procedure
 
@@ -218,7 +290,8 @@ The workflow performs these stages in order:
 
 ```text
 Tagged main commit
-→ build + twine check + SHA256SUMS + isolated wheel smoke
+→ build once + twine check + SHA256SUMS + isolated Ubuntu wheel smoke
+→ download/re-hash/install/smoke the exact retained wheel on 3 OS × Python 3.10/3.13
 → recheck tag == build commit
 → protected `pypi` environment approval
 → OIDC Trusted Publishing to PyPI
@@ -233,7 +306,7 @@ Tagged main commit
 → create GitHub Release with the same wheel, sdist, and SHA256SUMS
 ```
 
-The GitHub Release is created only after PyPI hash verification, fresh-install smoke, artifact/checksum revalidation, provenance generation, independent provenance verification, and the final tag-identity check succeed.
+The GitHub Release is created only after exact cross-platform candidate smoke, PyPI hash verification, fresh-install smoke, artifact/checksum revalidation, provenance generation, independent provenance verification, and the final tag-identity check succeed.
 
 ## Published artifact verification
 
@@ -243,7 +316,13 @@ The GitHub Release receives the original build-job wheel, sdist, and `SHA256SUMS
 
 ## Failure and recovery boundaries
 
-### Failure before PyPI upload
+### Candidate matrix fails before PyPI upload
+
+No package has been published. Keep the matrix evidence and determine whether the failure is platform/Python-specific, a retained-artifact/checksum mismatch, or a package-smoke regression.
+
+Do not bypass the failing matrix child and do not rebuild only for that OS. Fix the source/release preparation on a new commit and produce a new intended release identity according to the release plan. The purpose of the matrix is specifically to test one candidate artifact across targets.
+
+### Other failure before PyPI upload
 
 No package has been published. Fix the problem on a new commit. Do not move an already public release tag to a different commit; create the correct tag/version after the release state is fixed.
 
@@ -277,13 +356,15 @@ The PyPI files and original build artifacts have already passed the required ver
 - `id-token: write` is granted only to the PyPI publishing job and the separate artifact-attestation job, each for a distinct short-lived OIDC purpose.
 - `attestations: write` is granted only to the post-publication artifact-attestation job.
 - Every external release-workflow action is pinned to a reviewed full commit SHA.
+- The build job creates one candidate wheel/sdist/checksum set; the candidate-smoke matrix never rebuilds or rewrites it.
+- Every candidate-smoke child downloads the original retained artifact, verifies it read-only, installs the exact retained wheel, and has only `contents: read` repository permission.
 - The PyPI publishing job does not check out or execute repository code; it only downloads the prebuilt artifact and calls the pinned official PyPA publishing action.
 - The attestation job does not check out repository code or rebuild artifacts; it only downloads the original build artifact, revalidates it, attests it, and verifies the resulting attestations.
 - Checkout credentials are not persisted in jobs that check out the release source/build commit.
 - The tagged commit must already be in `main` history.
-- Tag identity is rechecked against the original build commit before upload, after upload, before attestation, and before GitHub Release creation.
+- Tag identity is rechecked against the original build commit after the candidate matrix and before upload, after upload, before attestation, and before GitHub Release creation.
 - Post-publication verification uses the exact build commit rather than re-trusting a movable tag.
-- The release tag, project version, package version, built artifact names, PyPI hashes, installed version, original checksums, and attested subject digests must remain one coherent release identity.
+- The release tag, project version, package version, built artifact names, candidate-matrix hashes, PyPI hashes, installed version, original checksums, and attested subject digests must remain one coherent release identity.
 - The workflow defaults to `dry-run`; publish requires an explicit mode choice and the protected `pypi` environment.
-- Dry-run never creates final-release attestations.
+- Dry-run runs the full exact-candidate matrix but never creates final-release attestations or uploads to PyPI.
 - Existing PyPI versions and already-published release tags are never intentionally overwritten or retroactively rebuilt.
