@@ -208,7 +208,7 @@ class GrokUnknownSchemaProbeTests(unittest.TestCase):
                 run_probe(**_kwargs(source, root / "safe.json"))
 
     def test_per_document_size_limit_fails_without_content_echo(self):
-        private = "PRIVATE_LARGE_CONTENT_" * 100
+        private = "PRIVATE_LARGE_CONTENT_" * 60000
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             source = root / "large.json"
