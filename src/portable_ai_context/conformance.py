@@ -7,6 +7,7 @@ from typing import Any, Iterable, Sequence
 from .adapters import clean_html as clean_html_adapter
 from .adapters import compact_txt as compact_txt_adapter
 from .adapters import jsonl as jsonl_adapter
+from .canonical_contract import CANONICAL_ROLES
 from .exporters import clean_html as export_clean_html
 from .exporters import compact_txt as export_compact_txt
 from .exporters import jsonl as export_jsonl
@@ -15,7 +16,6 @@ from .models import Conversation
 from .utils import normalize_text
 
 
-CANONICAL_ROLES = frozenset({"user", "assistant"})
 SOURCE_KIND_RE = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
 
 

@@ -12,6 +12,10 @@ from portable_ai_context.bundle_contract import (
     AICB_REQUIRED_MEMBERS,
     AICB_SCHEMA_VERSION,
 )
+from portable_ai_context.canonical_contract import (
+    CANONICAL_MESSAGE_FIELDS,
+    CANONICAL_ROLES,
+)
 from portable_ai_context.errors import ParseError
 from portable_ai_context.integrity import inspect as inspect_integrity
 from portable_ai_context.models import Conversation, SourceInfo
@@ -180,9 +184,9 @@ def _validate_bundle_jsonl_shape(text: str) -> None:
             value = json.loads(line)
         except json.JSONDecodeError as exc:
             raise _fail(f"conversation.jsonl line {lineno} is invalid JSON") from exc
-        if not isinstance(value, dict) or set(value) != {"role", "text"}:
+        if not isinstance(value, dict) or set(value) != CANONICAL_MESSAGE_FIELDS:
             raise _fail(f"conversation.jsonl line {lineno} is not a canonical bundle record")
-        if value.get("role") not in {"user", "assistant"}:
+        if value.get("role") not in CANONICAL_ROLES:
             raise _fail(f"conversation.jsonl line {lineno} has a noncanonical role")
         body = value.get("text")
         if not isinstance(body, str) or not body.strip():

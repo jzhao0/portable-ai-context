@@ -8,6 +8,7 @@ from pathlib import Path
 import zipfile
 
 from .bundle_contract import AICB_MEMBER_ORDER, AICB_SCHEMA_VERSION
+from .canonical_contract import canonical_message_record
 from .compact_format import FORMAT_HEADER as COMPACT_FORMAT_HEADER, escape_message_text
 from .integrity import inspect as inspect_integrity
 from .models import Conversation
@@ -22,7 +23,9 @@ def clean_html(conversation: Conversation) -> str:
     data = {
         "format": CLEAN_FORMAT,
         "title": conversation.title,
-        "messages": [{"role": m.role, "text": m.text} for m in conversation.messages],
+        "messages": [
+            canonical_message_record(m.role, m.text) for m in conversation.messages
+        ],
     }
     payload = json.dumps(data, ensure_ascii=False).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
     body = []
@@ -64,7 +67,7 @@ def compact_txt(conversation: Conversation) -> str:
 
 def jsonl(conversation: Conversation) -> str:
     return "".join(
-        json.dumps({"role": m.role, "text": m.text}, ensure_ascii=False) + "\n"
+        json.dumps(canonical_message_record(m.role, m.text), ensure_ascii=False) + "\n"
         for m in conversation.messages
     )
 
