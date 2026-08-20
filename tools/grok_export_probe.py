@@ -7,7 +7,7 @@ from pathlib import Path
 import re
 import sys
 import zipfile
-from typing import Any, Iterable, Iterator
+from typing import Any, Iterator
 
 
 USER_MARKER_DEFAULT = "PAIC_GROK_EXPORT_SENTINEL_20260819_USER"
@@ -27,6 +27,7 @@ SAFE_STRUCTURAL_LITERALS = frozenset(
 SUSPICIOUS_KEY_PATTERNS = (
     re.compile(r"@"),
     re.compile(r"https?://", re.IGNORECASE),
+    re.compile(r"^\d{4}-\d{2}-\d{2}(?:[T _].*)?$"),
     re.compile(r"^[0-9]{8,}$"),
     re.compile(r"^[0-9a-f]{8}-[0-9a-f-]{27,}$", re.IGNORECASE),
     re.compile(r"^[0-9a-f]{24,}$", re.IGNORECASE),
@@ -56,13 +57,15 @@ class _Budget:
             raise ProbeError("JSON structure exceeded the configured node limit")
 
 
-def _marker_mask_for_string(value: str, user_marker: str, assistant_marker: str) -> int:
-    mask = 0
-    if user_marker in value:
-        mask |= 1
-    if assistant_marker in value:
-        mask |= 2
-    return mask
+def _marker_stats_for_string(
+    value: str,
+    user_marker: str,
+    assistant_marker: str,
+) -> tuple[int, int, int]:
+    user_count = value.count(user_marker)
+    assistant_count = value.count(assistant_marker)
+    mask = (1 if user_count else 0) | (2 if assistant_count else 0)
+    return mask, user_count, assistant_count
 
 
 def _find_minimal_dict_contexts(
@@ -72,86 +75,94 @@ def _find_minimal_dict_contexts(
     assistant_marker: str,
     budget: _Budget,
     depth: int = 0,
-) -> tuple[int, list[dict[str, Any]]]:
-    """Return marker mask and minimal dict nodes whose subtrees contain both markers.
+) -> tuple[int, int, int, list[dict[str, Any]]]:
+    """Return marker stats and minimal dicts whose subtrees contain both markers.
 
     No provider field names participate in discovery. A parent dictionary is
     selected only when its subtree contains both fixed markers and no nested
-    dictionary already contains both markers.
+    dictionary already contains both markers. Marker counts include string
+    dictionary keys as well as values so ambiguity cannot hide in map keys.
     """
 
     budget.visit(depth)
 
     if isinstance(value, str):
-        return _marker_mask_for_string(value, user_marker, assistant_marker), []
+        mask, user_count, assistant_count = _marker_stats_for_string(
+            value, user_marker, assistant_marker
+        )
+        return mask, user_count, assistant_count, []
 
     if isinstance(value, dict):
         mask = 0
+        user_count = 0
+        assistant_count = 0
         nested: list[dict[str, Any]] = []
         for key, child in value.items():
             if isinstance(key, str):
-                mask |= _marker_mask_for_string(key, user_marker, assistant_marker)
-            child_mask, child_contexts = _find_minimal_dict_contexts(
-                child,
-                user_marker=user_marker,
-                assistant_marker=assistant_marker,
-                budget=budget,
-                depth=depth + 1,
+                key_mask, key_user, key_assistant = _marker_stats_for_string(
+                    key, user_marker, assistant_marker
+                )
+                mask |= key_mask
+                user_count += key_user
+                assistant_count += key_assistant
+
+            child_mask, child_user, child_assistant, child_contexts = (
+                _find_minimal_dict_contexts(
+                    child,
+                    user_marker=user_marker,
+                    assistant_marker=assistant_marker,
+                    budget=budget,
+                    depth=depth + 1,
+                )
             )
             mask |= child_mask
+            user_count += child_user
+            assistant_count += child_assistant
             nested.extend(child_contexts)
 
         if mask == 3:
             if nested:
-                return mask, nested
-            return mask, [value]
-        return mask, nested
+                return mask, user_count, assistant_count, nested
+            return mask, user_count, assistant_count, [value]
+        return mask, user_count, assistant_count, nested
 
     if isinstance(value, list):
         mask = 0
+        user_count = 0
+        assistant_count = 0
         nested: list[dict[str, Any]] = []
         for child in value:
-            child_mask, child_contexts = _find_minimal_dict_contexts(
-                child,
-                user_marker=user_marker,
-                assistant_marker=assistant_marker,
-                budget=budget,
-                depth=depth + 1,
+            child_mask, child_user, child_assistant, child_contexts = (
+                _find_minimal_dict_contexts(
+                    child,
+                    user_marker=user_marker,
+                    assistant_marker=assistant_marker,
+                    budget=budget,
+                    depth=depth + 1,
+                )
             )
             mask |= child_mask
+            user_count += child_user
+            assistant_count += child_assistant
             nested.extend(child_contexts)
-        return mask, nested
+        return mask, user_count, assistant_count, nested
 
-    return 0, []
-
-
-def _marker_occurrences(value: Any, marker: str, *, max_nodes: int, max_depth: int) -> int:
-    budget = _Budget(max_nodes=max_nodes, max_depth=max_depth)
-    count = 0
-
-    def walk(node: Any, depth: int) -> None:
-        nonlocal count
-        budget.visit(depth)
-        if isinstance(node, str):
-            count += node.count(marker)
-        elif isinstance(node, dict):
-            for key, child in node.items():
-                if isinstance(key, str):
-                    count += key.count(marker)
-                walk(child, depth + 1)
-        elif isinstance(node, list):
-            for child in node:
-                walk(child, depth + 1)
-
-    walk(value, 0)
-    return count
+    return 0, 0, 0, []
 
 
-def _safe_key(key: Any, redacted_index: int) -> str:
+def _safe_key(
+    key: Any,
+    redacted_index: int,
+    *,
+    user_marker: str,
+    assistant_marker: str,
+) -> str:
     if not isinstance(key, str):
         return f"<redacted-key-{redacted_index}>"
     if (
         not key
+        or user_marker in key
+        or assistant_marker in key
         or len(key) > 120
         or any(ord(char) < 32 for char in key)
         or any(pattern.search(key) for pattern in SUSPICIOUS_KEY_PATTERNS)
@@ -189,7 +200,12 @@ def sanitize_unknown_structure(
             result: dict[str, Any] = {}
             redacted_index = 0
             for key, child in node.items():
-                safe_key = _safe_key(key, redacted_index + 1)
+                safe_key = _safe_key(
+                    key,
+                    redacted_index + 1,
+                    user_marker=user_marker,
+                    assistant_marker=assistant_marker,
+                )
                 if safe_key.startswith("<redacted-key-"):
                     redacted_index += 1
                 while safe_key in result:
@@ -232,7 +248,9 @@ def _iter_jsonl(raw: bytes, *, max_documents: int) -> Iterator[Any]:
             continue
         produced += 1
         if produced > max_documents:
-            raise ProbeError("JSONL/NDJSON record count exceeded the configured document limit")
+            raise ProbeError(
+                "JSONL/NDJSON record count exceeded the configured document limit"
+            )
         yield value
 
 
@@ -242,7 +260,9 @@ def _bounded_read_file(path: Path, *, max_json_bytes: int) -> bytes:
     except OSError as exc:
         raise ProbeError("local export file metadata could not be read") from exc
     if size > max_json_bytes:
-        raise ProbeError("refusing JSON/JSONL document larger than the configured per-document limit")
+        raise ProbeError(
+            "refusing JSON/JSONL document larger than the configured per-document limit"
+        )
     raw = path.read_bytes()
     if len(raw) > max_json_bytes:
         raise ProbeError("JSON/JSONL document exceeded the configured per-document limit")
@@ -271,7 +291,12 @@ def _iter_source_files(source: Path, *, output: Path) -> Iterator[Path]:
     raise ProbeError("source path does not exist")
 
 
-def _documents_from_raw(raw: bytes, suffix: str, *, max_documents: int) -> Iterator[Any]:
+def _documents_from_raw(
+    raw: bytes,
+    suffix: str,
+    *,
+    max_documents: int,
+) -> Iterator[Any]:
     if suffix in JSON_SUFFIXES:
         document = _decode_json(raw)
         if document is not None:
@@ -294,6 +319,7 @@ def _scan_source(
         "json_files_seen": 0,
         "jsonl_files_seen": 0,
         "html_documents_seen": 0,
+        "other_files_seen": 0,
         "documents_scanned": 0,
         "bytes_read": 0,
     }
@@ -322,6 +348,7 @@ def _scan_source(
                         counters["html_documents_seen"] += 1
                         continue
                     if suffix not in JSON_SUFFIXES | JSONL_SUFFIXES:
+                        counters["other_files_seen"] += 1
                         continue
                     if info.file_size > max_json_bytes:
                         raise ProbeError(
@@ -330,7 +357,9 @@ def _scan_source(
                     with archive.open(info) as handle:
                         raw = handle.read(max_json_bytes + 1)
                     if len(raw) > max_json_bytes:
-                        raise ProbeError("ZIP JSON/JSONL member exceeded the configured per-document limit")
+                        raise ProbeError(
+                            "ZIP JSON/JSONL member exceeded the configured per-document limit"
+                        )
                     account_bytes(len(raw))
                     if suffix in JSON_SUFFIXES:
                         counters["json_files_seen"] += 1
@@ -338,8 +367,12 @@ def _scan_source(
                         counters["jsonl_files_seen"] += 1
                     remaining = max_documents - counters["documents_scanned"]
                     if remaining <= 0:
-                        raise ProbeError("parsed JSON document count exceeded the configured limit")
-                    for document in _documents_from_raw(raw, suffix, max_documents=remaining):
+                        raise ProbeError(
+                            "parsed JSON document count exceeded the configured limit"
+                        )
+                    for document in _documents_from_raw(
+                        raw, suffix, max_documents=remaining
+                    ):
                         account_document()
                         yield document
             return
@@ -350,6 +383,7 @@ def _scan_source(
                 counters["html_documents_seen"] += 1
                 continue
             if suffix not in JSON_SUFFIXES | JSONL_SUFFIXES:
+                counters["other_files_seen"] += 1
                 continue
             raw = _bounded_read_file(path, max_json_bytes=max_json_bytes)
             account_bytes(len(raw))
@@ -387,8 +421,12 @@ def run_probe(
 ) -> dict[str, Any]:
     if not user_marker or not assistant_marker:
         raise ProbeError("both deliberately non-sensitive sentinel markers are required")
-    if user_marker == assistant_marker:
-        raise ProbeError("user and assistant sentinel markers must differ")
+    if (
+        user_marker == assistant_marker
+        or user_marker in assistant_marker
+        or assistant_marker in user_marker
+    ):
+        raise ProbeError("user and assistant sentinel markers must be distinct and non-overlapping")
     if len(user_marker) < 16 or len(assistant_marker) < 16:
         raise ProbeError("sentinel markers must each be at least 16 characters")
     for name, value in {
@@ -412,47 +450,49 @@ def run_probe(
         max_zip_members=max_zip_members,
     )
 
-    matches: list[dict[str, Any]] = []
+    selected: dict[str, Any] | None = None
+    matched_contexts = 0
     total_nodes = 0
+    user_occurrences = 0
+    assistant_occurrences = 0
+
     for document in documents:
         remaining_nodes = max_nodes - total_nodes
         if remaining_nodes <= 0:
             raise ProbeError("JSON structure exceeded the configured node limit")
         budget = _Budget(max_nodes=remaining_nodes, max_depth=max_depth)
-        _, contexts = _find_minimal_dict_contexts(
+        _, document_user, document_assistant, contexts = _find_minimal_dict_contexts(
             document,
             user_marker=user_marker,
             assistant_marker=assistant_marker,
             budget=budget,
         )
         total_nodes += budget.nodes_seen
-        matches.extend(contexts)
-        if len(matches) > 1:
-            raise ProbeError("expected exactly one minimal dictionary context containing both sentinels; found multiple")
+        user_occurrences += document_user
+        assistant_occurrences += document_assistant
+        matched_contexts += len(contexts)
+        if selected is None and contexts:
+            selected = contexts[0]
 
     if counters["documents_scanned"] == 0:
         raise ProbeError(
             "no readable JSON/JSONL/NDJSON documents found "
-            f"(HTML documents seen: {counters['html_documents_seen']})"
+            f"(HTML documents seen: {counters['html_documents_seen']}; "
+            f"other files seen: {counters['other_files_seen']})"
         )
-    if len(matches) != 1:
-        raise ProbeError("expected exactly one minimal dictionary context containing both sentinels; found none")
 
-    selected = matches[0]
-    user_occurrences = _marker_occurrences(
-        selected,
-        user_marker,
-        max_nodes=max_nodes,
-        max_depth=max_depth,
-    )
-    assistant_occurrences = _marker_occurrences(
-        selected,
-        assistant_marker,
-        max_nodes=max_nodes,
-        max_depth=max_depth,
-    )
-    if user_occurrences < 1 or assistant_occurrences < 1:
-        raise ProbeError("selected dictionary context unexpectedly lost a sentinel marker")
+    if user_occurrences != 1 or assistant_occurrences != 1:
+        raise ProbeError(
+            "expected each Grok sentinel exactly once; "
+            f"user occurrences: {user_occurrences}; "
+            f"assistant occurrences: {assistant_occurrences}"
+        )
+
+    if matched_contexts != 1 or selected is None:
+        raise ProbeError(
+            "expected exactly one minimal dictionary context containing both sentinels; "
+            f"found {matched_contexts}"
+        )
 
     specimen = sanitize_unknown_structure(
         selected,
@@ -464,8 +504,13 @@ def run_probe(
     encoded = (json.dumps(specimen, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
     if len(encoded) > max_specimen_kb * 1024:
         raise ProbeError("sanitized structural specimen exceeded the configured size limit")
-    if user_marker.encode("utf-8") not in encoded or assistant_marker.encode("utf-8") not in encoded:
-        raise ProbeError("sanitized structural specimen unexpectedly lost a sentinel marker")
+    if (
+        encoded.count(user_marker.encode("utf-8")) != 1
+        or encoded.count(assistant_marker.encode("utf-8")) != 1
+    ):
+        raise ProbeError(
+            "sanitized structural specimen did not preserve each Grok sentinel exactly once"
+        )
 
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_bytes(encoded)
@@ -476,11 +521,14 @@ def run_probe(
         "json_files_seen": counters["json_files_seen"],
         "jsonl_ndjson_files_seen": counters["jsonl_files_seen"],
         "html_documents_seen": counters["html_documents_seen"],
+        "other_files_seen": counters["other_files_seen"],
         "parsed_documents_scanned": counters["documents_scanned"],
         "json_structure_nodes_scanned": total_nodes,
         "matched_minimal_contexts": 1,
-        "user_marker_occurrences_in_context": user_occurrences,
-        "assistant_marker_occurrences_in_context": assistant_occurrences,
+        "user_marker_occurrences_in_export": user_occurrences,
+        "assistant_marker_occurrences_in_export": assistant_occurrences,
+        "user_marker_occurrences_in_context": 1,
+        "assistant_marker_occurrences_in_context": 1,
         "sanitized_specimen_sha256": _sha256_bytes(encoded),
         "sanitized_specimen_bytes": len(encoded),
         "output_file": output.name,
@@ -496,7 +544,10 @@ def build_parser() -> argparse.ArgumentParser:
             "without assuming provider field names."
         )
     )
-    parser.add_argument("source", help="local xAI export ZIP, JSON/JSONL/NDJSON file, or directory")
+    parser.add_argument(
+        "source",
+        help="local xAI export ZIP, JSON/JSONL/NDJSON file, or directory",
+    )
     parser.add_argument("-o", "--output", default="paic-grok-export.sanitized.json")
     parser.add_argument("--user-marker", default=USER_MARKER_DEFAULT)
     parser.add_argument("--assistant-marker", default=ASSISTANT_MARKER_DEFAULT)
