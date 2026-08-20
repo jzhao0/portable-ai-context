@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 import zipfile
 
+from .bundle_contract import AICB_MEMBER_ORDER, AICB_SCHEMA_VERSION
 from .compact_format import FORMAT_HEADER as COMPACT_FORMAT_HEADER, escape_message_text
 from .integrity import inspect as inspect_integrity
 from .models import Conversation
@@ -92,7 +93,7 @@ def write_bundle(conversation: Conversation, output: str | Path) -> Path:
     integrity = inspect_integrity(conversation)
     privacy = inspect_conversation(conversation)
     manifest = {
-        "schema_version": "0.1-alpha",
+        "schema_version": AICB_SCHEMA_VERSION,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "conversation": {
             "title": conversation.title,
@@ -100,13 +101,15 @@ def write_bundle(conversation: Conversation, output: str | Path) -> Path:
             "digest": integrity.conversation_digest,
             "source_kind": conversation.source.kind,
         },
-        "artifacts": [
-            "manifest.json", "conversation.jsonl", "integrity.json", "privacy.json"
-        ],
+        "artifacts": list(AICB_MEMBER_ORDER),
+    }
+    payloads = {
+        "manifest.json": json.dumps(manifest, ensure_ascii=False, indent=2),
+        "conversation.jsonl": jsonl(conversation),
+        "integrity.json": json.dumps(integrity.to_dict(), indent=2),
+        "privacy.json": json.dumps(privacy.to_dict(), indent=2),
     }
     with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as z:
-        z.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
-        z.writestr("conversation.jsonl", jsonl(conversation))
-        z.writestr("integrity.json", json.dumps(integrity.to_dict(), indent=2))
-        z.writestr("privacy.json", json.dumps(privacy.to_dict(), indent=2))
+        for name in AICB_MEMBER_ORDER:
+            z.writestr(name, payloads[name])
     return output
