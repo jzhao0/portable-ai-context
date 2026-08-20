@@ -41,6 +41,7 @@ def _kwargs(source: Path, output: Path, **overrides):
 class GrokUnknownSchemaProbeTests(unittest.TestCase):
     def test_unknown_field_names_find_minimal_context_and_redact_values(self):
         private_url_key = "https://grok.example/private/conversation/opaque-id"
+        private_timestamp_key = "2026-08-20T10:00:00+08:00"
         export = {
             "account": {
                 "email": "PRIVATE_ACCOUNT@example.invalid",
@@ -55,6 +56,7 @@ class GrokUnknownSchemaProbeTests(unittest.TestCase):
                     "conversationish": {
                         "private_uuid": "123e4567-e89b-12d3-a456-426614174000",
                         private_url_key: "PRIVATE_MAP_VALUE",
+                        private_timestamp_key: "PRIVATE_TIMESTAMP_KEY_VALUE",
                         "entries": [
                             {
                                 "speakerish": "user",
@@ -87,8 +89,10 @@ class GrokUnknownSchemaProbeTests(unittest.TestCase):
         self.assertEqual(report["matched_minimal_contexts"], 1)
         self.assertFalse(report["schema_fields_assumed"])
         self.assertTrue(report["raw_export_not_copied"])
-        self.assertGreaterEqual(report["user_marker_occurrences_in_context"], 1)
-        self.assertGreaterEqual(report["assistant_marker_occurrences_in_context"], 1)
+        self.assertEqual(report["user_marker_occurrences_in_export"], 1)
+        self.assertEqual(report["assistant_marker_occurrences_in_export"], 1)
+        self.assertEqual(report["user_marker_occurrences_in_context"], 1)
+        self.assertEqual(report["assistant_marker_occurrences_in_context"], 1)
 
         self.assertIn(USER, safe)
         self.assertIn(ASSISTANT, safe)
@@ -105,9 +109,10 @@ class GrokUnknownSchemaProbeTests(unittest.TestCase):
             "123e4567-e89b-12d3-a456-426614174000",
             private_url_key,
             "PRIVATE_MAP_VALUE",
+            private_timestamp_key,
+            "PRIVATE_TIMESTAMP_KEY_VALUE",
             "PRIVATE_NEIGHBOR",
             "PRIVATE_ASSISTANT_NEIGHBOR",
-            "2026-08-20T10:00:00+08:00",
             "A" * 64,
             "SHOULD_NOT_BE_IN_MINIMAL_CONTEXT",
         ]:
@@ -137,17 +142,20 @@ class GrokUnknownSchemaProbeTests(unittest.TestCase):
 
             self.assertEqual(report["jsonl_ndjson_files_seen"], 1)
             self.assertEqual(report["parsed_documents_scanned"], 2)
+            self.assertEqual(report["user_marker_occurrences_in_export"], 1)
+            self.assertEqual(report["assistant_marker_occurrences_in_export"], 1)
             self.assertIn(USER, safe)
             self.assertIn(ASSISTANT, safe)
             self.assertNotIn("PRIVATE_OTHER", safe)
 
-    def test_zip_counts_html_but_never_reads_it_as_evidence(self):
+    def test_zip_counts_html_and_other_files_without_reading_them_as_evidence(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             archive = root / "xai-download.zip"
             output = root / "safe.json"
             with zipfile.ZipFile(archive, "w") as handle:
                 handle.writestr("private.html", f"PRIVATE_HTML {USER} {ASSISTANT}")
+                handle.writestr("private.bin", b"PRIVATE_BINARY")
                 handle.writestr(
                     "nested/data.json",
                     json.dumps(
@@ -166,9 +174,11 @@ class GrokUnknownSchemaProbeTests(unittest.TestCase):
             safe = output.read_text(encoding="utf-8")
 
         self.assertEqual(report["html_documents_seen"], 1)
+        self.assertEqual(report["other_files_seen"], 1)
         self.assertIn(USER, safe)
         self.assertIn(ASSISTANT, safe)
         self.assertNotIn("PRIVATE_HTML", safe)
+        self.assertNotIn("PRIVATE_BINARY", safe)
 
     def test_html_only_source_fails_content_free(self):
         with tempfile.TemporaryDirectory() as td:
@@ -178,25 +188,30 @@ class GrokUnknownSchemaProbeTests(unittest.TestCase):
             (source / "private.html").write_text(
                 f"PRIVATE_HTML_BODY {USER} {ASSISTANT}", encoding="utf-8"
             )
+            (source / "private.bin").write_bytes(b"PRIVATE_BINARY_BODY")
             with self.assertRaisesRegex(ProbeError, "no readable JSON/JSONL/NDJSON") as caught:
                 run_probe(**_kwargs(source, root / "safe.json"))
 
         self.assertIn("HTML documents seen: 1", str(caught.exception))
+        self.assertIn("other files seen: 1", str(caught.exception))
         self.assertNotIn("PRIVATE_HTML_BODY", str(caught.exception))
+        self.assertNotIn("PRIVATE_BINARY_BODY", str(caught.exception))
 
-    def test_multiple_minimal_contexts_fail_closed(self):
+    def test_duplicate_sentinel_occurrences_anywhere_in_export_fail_closed(self):
         export = {
             "records": [
                 {"parts": [{"x": USER}, {"x": ASSISTANT}]},
-                {"parts": [{"y": USER}, {"y": ASSISTANT}]},
+                {"unrelated_copy": USER, "private": "PRIVATE_UNRELATED_TEXT"},
             ]
         }
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             source = root / "download.json"
             source.write_text(json.dumps(export), encoding="utf-8")
-            with self.assertRaisesRegex(ProbeError, "found multiple"):
+            with self.assertRaisesRegex(ProbeError, "user occurrences: 2") as caught:
                 run_probe(**_kwargs(source, root / "safe.json"))
+
+        self.assertNotIn("PRIVATE_UNRELATED_TEXT", str(caught.exception))
 
     def test_root_list_without_dictionary_context_fails_closed(self):
         export = [{"x": USER}, {"x": ASSISTANT}]
@@ -204,8 +219,36 @@ class GrokUnknownSchemaProbeTests(unittest.TestCase):
             root = Path(td)
             source = root / "download.json"
             source.write_text(json.dumps(export), encoding="utf-8")
-            with self.assertRaisesRegex(ProbeError, "found none"):
+            with self.assertRaisesRegex(ProbeError, "found 0"):
                 run_probe(**_kwargs(source, root / "safe.json"))
+
+    def test_overlapping_sentinel_configuration_is_rejected_before_read(self):
+        with self.assertRaisesRegex(ProbeError, "distinct and non-overlapping"):
+            run_probe(
+                **_kwargs(
+                    Path("does-not-need-to-exist"),
+                    Path("unused.json"),
+                    user_marker="PAIC_GROK_SENTINEL_1234567890",
+                    assistant_marker="PAIC_GROK_SENTINEL_1234567890_ASSISTANT",
+                )
+            )
+
+    def test_marker_bearing_map_key_fails_instead_of_exporting_key_neighbors(self):
+        private_key = f"PRIVATE_PREFIX_{USER}_PRIVATE_SUFFIX"
+        export = {
+            "conversation": {
+                private_key: "PRIVATE_VALUE",
+                "assistant": ASSISTANT,
+            }
+        }
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            source = root / "download.json"
+            output = root / "safe.json"
+            source.write_text(json.dumps(export), encoding="utf-8")
+            with self.assertRaisesRegex(ProbeError, "did not preserve each Grok sentinel exactly once"):
+                run_probe(**_kwargs(source, output))
+            self.assertFalse(output.exists())
 
     def test_per_document_size_limit_fails_without_content_echo(self):
         private = "PRIVATE_LARGE_CONTENT_" * 60000
@@ -217,6 +260,25 @@ class GrokUnknownSchemaProbeTests(unittest.TestCase):
                 run_probe(**_kwargs(source, root / "safe.json", max_json_mb=1))
         self.assertNotIn(private, str(caught.exception))
 
+    def test_total_read_limit_fails_closed_across_multiple_documents(self):
+        private = "P" * 700000
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "one.json").write_text(json.dumps({"private": private}), encoding="utf-8")
+            (root / "two.json").write_text(
+                json.dumps({"conversation": [{"x": USER}, {"y": ASSISTANT}], "private": private}),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ProbeError, "total-read limit"):
+                run_probe(
+                    **_kwargs(
+                        root,
+                        root / "safe.json",
+                        max_json_mb=2,
+                        max_total_json_mb=1,
+                    )
+                )
+
     def test_total_document_limit_fails_closed_for_jsonl(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -227,6 +289,17 @@ class GrokUnknownSchemaProbeTests(unittest.TestCase):
             )
             with self.assertRaisesRegex(ProbeError, "document limit"):
                 run_probe(**_kwargs(source, root / "safe.json", max_documents=2))
+
+    def test_zip_member_limit_fails_before_scanning_large_archive_shape(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            archive = root / "download.zip"
+            with zipfile.ZipFile(archive, "w") as handle:
+                handle.writestr("a.json", "{}")
+                handle.writestr("b.json", "{}")
+                handle.writestr("c.json", "{}")
+            with self.assertRaisesRegex(ProbeError, "ZIP member count"):
+                run_probe(**_kwargs(archive, root / "safe.json", max_zip_members=2))
 
     def test_node_limit_and_depth_limit_fail_closed(self):
         node_heavy = {"items": [{"x": index} for index in range(50)], "u": USER, "a": ASSISTANT}
@@ -292,6 +365,8 @@ class GrokUnknownSchemaProbeTests(unittest.TestCase):
 
         encoded = json.dumps(report)
         self.assertEqual(report["output_file"], "safe-result.json")
+        self.assertEqual(report["user_marker_occurrences_in_export"], 1)
+        self.assertEqual(report["assistant_marker_occurrences_in_export"], 1)
         self.assertNotIn("PRIVATE_USER", encoded)
         self.assertNotIn("Secret", encoded)
 
