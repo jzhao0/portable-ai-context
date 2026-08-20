@@ -1,1 +1,2 @@
 tests/fixtures/compat/v0.1.0a2-aicb/* text eol=lf
+tests/fixtures/canonical_role_text_golden.jsonl text eol=lf
