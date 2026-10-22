@@ -23,13 +23,13 @@ Build a cross-platform, source-agnostic conversation migration engine. The proje
 9. Keep mandatory dependencies minimal; standard library is preferred in core.
 10. Any schema or bundle format before v1.0 must be labeled unstable.
 
-## Verification before commit
+## Verification proportional to change
 
-Run:
+For compiler or adapter behavior changes, run the related existing unit tests; use the full test suite when shared canonical contracts change:
 
 ```bash
 python -m compileall -q src tests
 PYTHONPATH=src python -m unittest discover -s tests -v
 ```
 
-For packaging changes also build a wheel and install it into a clean environment.
+For packaging changes build a wheel and install it into a clean environment. Documentation, cosmetic and formatting fixes do not require these checks.
