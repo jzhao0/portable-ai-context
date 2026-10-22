@@ -1,5 +1,11 @@
 # AGENTS.md
 
+## Keep work proportional
+
+- Ordinary copy, docs, or presentation change: directly edit and inspect the affected output; do not run packaging/adapter matrices or create fixtures, probes, or reports for a cosmetic change.
+- Adapter, canonical data, privacy and export changes: use existing relevant tests, add only a regression case for a real failure mode, and preserve the privacy/secret rules below. Batch local work instead of repeated remote calls.
+
+
 ## Mission
 
 Build a cross-platform, source-agnostic conversation migration engine. The project is not a transcript exporter; it should preserve continuation-critical context while keeping extraction auditable and privacy-aware.
