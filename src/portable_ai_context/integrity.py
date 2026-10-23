@@ -36,16 +36,20 @@ def inspect(conversation: Conversation) -> IntegrityReport:
 
     last_user = None
     last_assistant = None
-    for m in conversation.messages:
-        if m.role == "user":
-            last_user = message_hash(m.role, m.text)
-        elif m.role == "assistant":
-            last_assistant = message_hash(m.role, m.text)
+    user_count = 0
+    assistant_count = 0
+    for message, digest_value in zip(conversation.messages, hashes):
+        if message.role == "user":
+            last_user = digest_value
+            user_count += 1
+        elif message.role == "assistant":
+            last_assistant = digest_value
+            assistant_count += 1
 
     return IntegrityReport(
         message_count=len(conversation.messages),
-        user_count=sum(m.role == "user" for m in conversation.messages),
-        assistant_count=sum(m.role == "assistant" for m in conversation.messages),
+        user_count=user_count,
+        assistant_count=assistant_count,
         conversation_digest=digest,
         first_message_hash=hashes[0] if hashes else None,
         last_message_hash=hashes[-1] if hashes else None,
