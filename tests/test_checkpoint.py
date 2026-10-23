@@ -18,6 +18,7 @@ from portable_ai_context.checkpoint import (
 from portable_ai_context.cli import main as cli_main
 from portable_ai_context.compiler import CallableTokenCounter
 from portable_ai_context.errors import PortableAIContextError
+from portable_ai_context.integrity import inspect as inspect_integrity, message_hash
 from portable_ai_context.models import Conversation, Message, SourceInfo
 
 
@@ -62,6 +63,17 @@ def long_state_conversation(message_count: int = 80) -> Conversation:
 
 
 class DeterministicCheckpointTests(unittest.TestCase):
+    def test_checkpoint_hashes_every_source_message_once(self):
+        conversation = long_state_conversation(30)
+        expected_digest = inspect_integrity(conversation).conversation_digest
+        with mock.patch(
+            "portable_ai_context.checkpoint.message_hash",
+            wraps=message_hash,
+        ) as hashed:
+            result = build_extractive_checkpoint(conversation)
+        self.assertEqual(hashed.call_count, len(conversation.messages))
+        self.assertEqual(result.report.source_conversation_digest, expected_digest)
+
     def test_short_conversation_default_standard_preserves_all_messages(self):
         conversation = sample_conversation()
         result = build_extractive_checkpoint(conversation)
