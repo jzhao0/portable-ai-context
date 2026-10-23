@@ -29,8 +29,13 @@ def message_hash(role: str, text: str) -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
-def inspect(conversation: Conversation) -> IntegrityReport:
-    hashes = [message_hash(m.role, m.text) for m in conversation.messages]
+def inspect(
+    conversation: Conversation, *, _message_hashes: list[str] | None = None,
+) -> IntegrityReport:
+    # Checkpoint compilation has already calculated each source hash.
+    hashes = _message_hashes if _message_hashes is not None else [
+        message_hash(m.role, m.text) for m in conversation.messages
+    ]
     digest_input = "\n".join(hashes).encode("ascii")
     digest = hashlib.sha256(digest_input).hexdigest()
 
