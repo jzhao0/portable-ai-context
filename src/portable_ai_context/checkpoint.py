@@ -278,8 +278,10 @@ def build_extractive_checkpoint(
         raise ValueError(f"extractive checkpoint budget must be at least {MIN_BUDGET_TOKENS} tokens")
 
     counter = token_counter or CharacterTokenCounter(chars_per_token=chars_per_token)
-    integrity = inspect_integrity(conversation)
     prepared = _prepare_messages(conversation)
+    integrity = inspect_integrity(
+        conversation, _message_hashes=[message.source_hash for message in prepared],
+    )
     source_kind = conformance.source_kind
 
     prefix = _render_prefix(
