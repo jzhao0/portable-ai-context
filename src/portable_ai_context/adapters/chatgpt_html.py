@@ -121,17 +121,36 @@ def _number(value: Any) -> float:
 
 
 def find_conversation(tables: list[list[Any]]) -> dict[str, Any]:
-    candidates: list[dict[str, Any]] = []
+    """Select the strongest share candidate without rescanning each flat table.
+
+    Candidate order remains (table, linear_conversation key index, item index):
+    identical scores still select the earliest candidate, just as max() did.
+    """
+    best: dict[str, Any] | None = None
+    best_score: tuple[float, int, float] | None = None
+
     for table_index, table in enumerate(tables):
         key_indices = [i for i, item in enumerate(table) if item == "linear_conversation"]
         if not key_indices:
             continue
         resolver = FlatTableResolver(table)
+
+        # In some share exports the same key string occupies several flat-table
+        # positions. The old inner loop scanned every item once per position.
+        # Index matching dicts in one pass, preserving item order for each key.
+        by_key: dict[str, list[tuple[int, dict[str, Any]]]] = {
+            f"_{index}": [] for index in key_indices
+        }
+        for item_index, item in enumerate(table):
+            if not isinstance(item, dict):
+                continue
+            for raw_key in item:
+                if raw_key in by_key:
+                    by_key[raw_key].append((item_index, item))
+
         for key_index in key_indices:
             encoded_key = f"_{key_index}"
-            for item_index, item in enumerate(table):
-                if not isinstance(item, dict) or encoded_key not in item:
-                    continue
+            for item_index, item in by_key[encoded_key]:
                 linear = resolver.resolve(item[encoded_key])
                 if not isinstance(linear, list) or not linear:
                     continue
@@ -145,19 +164,18 @@ def find_conversation(tables: list[list[Any]]) -> dict[str, Any]:
                         conv[key] = resolver.resolve(raw_value) if isinstance(raw_value, int) else raw_value
                 conv["_candidate_table"] = table_index
                 conv["_candidate_item"] = item_index
-                candidates.append(conv)
+                score = (
+                    _number(conv.get("update_time")),
+                    len(conv.get("linear_conversation", [])),
+                    _number(conv.get("create_time")),
+                )
+                if best_score is None or score > best_score:
+                    best = conv
+                    best_score = score
 
-    if not candidates:
+    if best is None:
         raise ParseError("linear_conversation not found")
-
-    return max(
-        candidates,
-        key=lambda c: (
-            _number(c.get("update_time")),
-            len(c.get("linear_conversation", [])),
-            _number(c.get("create_time")),
-        ),
-    )
+    return best
 
 
 def _strings_from_part(part: Any) -> Iterable[str]:
