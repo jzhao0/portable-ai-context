@@ -33,3 +33,9 @@ PYTHONPATH=src python -m unittest discover -s tests -v
 ```
 
 For packaging changes build a wheel and install it into a clean environment. Documentation, cosmetic and formatting fixes do not require these checks.
+
+## Parallel development and CI discipline
+
+- Feature development can proceed alongside independent code/performance review. Before incorporating a fix, inspect current branch/HEAD, local modifications and open PRs; a remote commit or Draft PR is not automatically present in a local checkout. Preserve other work: no unrequested reset, force-push, overwrite or automatic merge.
+- Prefer focused local tests and run GitHub-hosted Actions only when meaningful for the change and current billing/runner conditions. A skipped or unrun workflow is never PASS; temporary manual CI is not a permanent ban.
+- Keep this public repository's own licensing, privacy, security, publication and product requirements authoritative. Never import private cross-repository audit files or private user data into this repository. Do not add an orchestration or CI framework for routine changes.
