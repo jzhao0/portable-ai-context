@@ -17,6 +17,7 @@ from portable_ai_context.checkpoint import (
 )
 from portable_ai_context.cli import main as cli_main
 from portable_ai_context.compiler import CallableTokenCounter
+from portable_ai_context.compiler.budget import CharacterTokenCounter
 from portable_ai_context.errors import PortableAIContextError
 from portable_ai_context.integrity import inspect as inspect_integrity, message_hash
 from portable_ai_context.models import Conversation, Message, SourceInfo
@@ -63,6 +64,26 @@ def long_state_conversation(message_count: int = 80) -> Conversation:
 
 
 class DeterministicCheckpointTests(unittest.TestCase):
+    def test_character_fast_path_matches_full_render_counter(self):
+        # A CallableTokenCounter with the same exact formula exercises the
+        # fallback full-document counting path as a differential oracle.
+        conversation = long_state_conversation(100)
+        for chars_per_token in (2.5, 4.0, 7.0):
+            estimate = CharacterTokenCounter(chars_per_token=chars_per_token)
+            fallback = CallableTokenCounter(
+                fn=estimate.count, name=estimate.name, exact=estimate.exact,
+            )
+            for budget in (512, 800, 2000, 7000):
+                with self.subTest(chars_per_token=chars_per_token, budget=budget):
+                    fast = build_extractive_checkpoint(
+                        conversation, budget_tokens=budget, token_counter=estimate,
+                    )
+                    slow = build_extractive_checkpoint(
+                        conversation, budget_tokens=budget, token_counter=fallback,
+                    )
+                    self.assertEqual(fast.markdown, slow.markdown)
+                    self.assertEqual(fast.report.to_dict(), slow.report.to_dict())
+
     def test_checkpoint_hashes_every_source_message_once(self):
         conversation = long_state_conversation(30)
         expected_digest = inspect_integrity(conversation).conversation_digest
