@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+import math
 import re
 from typing import Any, Iterable
 
@@ -202,6 +203,18 @@ def _fit_candidate(
     if phase_budget <= 0:
         return None
 
+    # For the dependency-free character estimator, only the rendered length
+    # matters. Cache the already-selected text length once for this candidate;
+    # do not rebuild/retokenize a growing checkpoint at each binary-search step.
+    # Exact/provider counters remain on the original full-text counting path.
+    character_base_length: int | None = None
+    if type(counter) is CharacterTokenCounter and prepared.index not in selected:
+        character_base_length = (
+            len(prefix) + len(suffix)
+            + sum(len(_render_block(item)) for item in selected.values())
+            + len(selected)  # separators after inserting this candidate
+        )
+
     def feasible(keep_chars: int) -> tuple[bool, _SelectedMessage]:
         text, truncated = _excerpt_text(prepared.text, keep_chars)
         candidate = _SelectedMessage(
@@ -210,12 +223,19 @@ def _fit_candidate(
             reasons=normalized_reasons,
             truncated=truncated,
         )
-        block_tokens = counter.count(_render_block(candidate))
+        rendered_block = _render_block(candidate)
+        block_tokens = counter.count(rendered_block)
         if block_tokens > phase_budget:
             return False, candidate
-        provisional = dict(selected)
-        provisional[prepared.index] = candidate
-        total_tokens = counter.count(_render_checkpoint(prefix, provisional, suffix))
+        if character_base_length is not None:
+            # CharacterTokenCounter.count uses ceil(len(text) / chars_per_token).
+            # Use the same formula without allocating the provisional document.
+            total_chars = character_base_length + len(rendered_block)
+            total_tokens = max(1, math.ceil(total_chars / counter.chars_per_token))
+        else:
+            provisional = dict(selected)
+            provisional[prepared.index] = candidate
+            total_tokens = counter.count(_render_checkpoint(prefix, provisional, suffix))
         return total_tokens <= total_budget, candidate
 
     full_ok, full_candidate = feasible(len(prepared.text))
